@@ -236,41 +236,45 @@ def _encabezado(el, datos_empresa, estilos, paleta, disenio,
 # ── Bloque de firmas dobles ───────────────────────────────────────────────────
 def _firmas_dobles(el, representante: str, empresa: str,
                    nombre_empleado: str, cedula: str, paleta: dict, estilos: dict):
-    """Genera dos firmas: representante legal (izq) y empleado (der) con línea encima."""
-    linea_firma = Table(
-        [["", ""]],
-        colWidths=[7*cm, 7*cm],
-    )
-    linea_firma.setStyle(TableStyle([
-        ("LINEABOVE", (0,0), (0,0), 0.8, paleta["primario"]),
-        ("LINEABOVE", (1,0), (1,0), 0.8, paleta["primario"]),
-        ("TOPPADDING",    (0,0), (-1,-1), 0),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 4),
-        ("LEFTPADDING",   (0,0), (-1,-1), 0),
-        ("RIGHTPADDING",  (0,0), (-1,-1), 0),
-    ]))
+    """
+    Dos firmas lado a lado con línea separada encima de cada una.
+    Usa dos HRFlowable independientes dentro de celdas para garantizar
+    que cada firma tenga su propia línea (no una línea unificada).
+    """
+    from reportlab.platypus import KeepTogether
 
-    nombre_rep_p = Paragraph(f"<b>{representante}</b>", estilos["firma_nombre"])
-    cargo_rep_p  = Paragraph(f"Representante Legal<br/>{empresa}", estilos["firma_cargo"])
-    nombre_emp_p = Paragraph(f"<b>{nombre_empleado}</b>", estilos["firma_nombre"])
-    cedula_emp_p = Paragraph(f"C.C.: {cedula}", estilos["firma_cargo"])
+    # Bloque firma izquierda: línea + nombre + cargo
+    bloque_rep = [
+        HRFlowable(width=7*cm, thickness=0.8,
+                   color=paleta["primario"], spaceAfter=5),
+        Paragraph(f"<b>{representante}</b>", estilos["firma_nombre"]),
+        Paragraph(f"Representante Legal", estilos["firma_cargo"]),
+        Paragraph(empresa, estilos["firma_cargo"]),
+    ]
 
-    t_info = Table(
-        [[nombre_rep_p, nombre_emp_p],
-         [cargo_rep_p,  cedula_emp_p]],
+    # Bloque firma derecha: línea + nombre + cédula
+    bloque_emp = [
+        HRFlowable(width=7*cm, thickness=0.8,
+                   color=paleta["primario"], spaceAfter=5),
+        Paragraph(f"<b>{nombre_empleado}</b>", estilos["firma_nombre"]),
+        Paragraph(f"C.C.: {cedula}", estilos["firma_cargo"]),
+    ]
+
+    # Tabla que ubica los dos bloques lado a lado
+    t_firmas = Table(
+        [[bloque_rep, bloque_emp]],
         colWidths=[8.5*cm, 8.5*cm],
     )
-    t_info.setStyle(TableStyle([
-        ("VALIGN", (0,0), (-1,-1), "TOP"),
-        ("LEFTPADDING",  (0,0), (-1,-1), 0),
-        ("RIGHTPADDING", (0,0), (-1,-1), 0),
-        ("TOPPADDING",   (0,0), (-1,-1), 2),
-        ("BOTTOMPADDING",(0,0), (-1,-1), 2),
+    t_firmas.setStyle(TableStyle([
+        ("VALIGN",        (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
+        ("TOPPADDING",    (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
     ]))
 
     el.append(Spacer(1, 36))
-    el.append(linea_firma)
-    el.append(t_info)
+    el.append(t_firmas)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -313,8 +317,19 @@ def generar_certificado(empleado: dict, datos_empresa: dict, ruta_salida: str,
     el.append(Spacer(1, 32))
     el.append(Paragraph("Cordialmente,", estilos["cuerpo"]))
     el.append(Spacer(1, 28))
-    el.append(HRFlowable(width=7*cm, thickness=0.7,
-        color=paleta["primario"], spaceAfter=4))
+    # Línea alineada a la izquierda, del mismo ancho que el nombre del representante
+    t_firma_cert = Table(
+        [["", ""]],
+        colWidths=[8*cm, 9*cm],
+    )
+    t_firma_cert.setStyle(TableStyle([
+        ("LINEABOVE",     (0,0), (0,0), 0.8, paleta["primario"]),
+        ("TOPPADDING",    (0,0), (-1,-1), 0),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+        ("LEFTPADDING",   (0,0), (-1,-1), 0),
+        ("RIGHTPADDING",  (0,0), (-1,-1), 0),
+    ]))
+    el.append(t_firma_cert)
     el.append(Paragraph(datos_empresa.get("representante",""), estilos["firma_nombre"]))
     el.append(Paragraph(
         f"Representante Legal — {datos_empresa.get('nombre','')}",
@@ -357,8 +372,18 @@ def generar_vacaciones(empleado: dict, datos_empresa: dict, ruta_salida: str,
     el.append(Spacer(1, 32))
     el.append(Paragraph("Cordialmente,", estilos["cuerpo"]))
     el.append(Spacer(1, 28))
-    el.append(HRFlowable(width=7*cm, thickness=0.7,
-        color=paleta["primario"], spaceAfter=4))
+    t_firma_vac = Table(
+        [["", ""]],
+        colWidths=[8*cm, 9*cm],
+    )
+    t_firma_vac.setStyle(TableStyle([
+        ("LINEABOVE",     (0,0), (0,0), 0.8, paleta["primario"]),
+        ("TOPPADDING",    (0,0), (-1,-1), 0),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+        ("LEFTPADDING",   (0,0), (-1,-1), 0),
+        ("RIGHTPADDING",  (0,0), (-1,-1), 0),
+    ]))
+    el.append(t_firma_vac)
     el.append(Paragraph(datos_empresa.get("representante",""), estilos["firma_nombre"]))
     el.append(Paragraph(
         f"Representante Legal — {datos_empresa.get('nombre','')}",
