@@ -235,20 +235,18 @@ def _encabezado(el, datos_empresa, estilos, paleta, disenio,
 
 # ── Bloque de firmas dobles ───────────────────────────────────────────────────
 def _firmas_dobles(el, representante: str, empresa: str,
-                   nombre_empleado: str, cedula: str, paleta: dict, estilos: dict):
+                   nombre_empleado: str, cedula: str, paleta: dict, estilos: dict,
+                   cargo_firmante: str = "Representante Legal"):
     """
     Dos firmas lado a lado con línea separada encima de cada una.
-    Usa dos HRFlowable independientes dentro de celdas para garantizar
-    que cada firma tenga su propia línea (no una línea unificada).
     """
     from reportlab.platypus import KeepTogether
 
-    # Bloque firma izquierda: línea + nombre + cargo
     bloque_rep = [
         HRFlowable(width=7*cm, thickness=0.8,
                    color=paleta["primario"], spaceAfter=5),
         Paragraph(f"<b>{representante}</b>", estilos["firma_nombre"]),
-        Paragraph(f"Representante Legal", estilos["firma_cargo"]),
+        Paragraph(cargo_firmante, estilos["firma_cargo"]),
         Paragraph(empresa, estilos["firma_cargo"]),
     ]
 
@@ -332,7 +330,7 @@ def generar_certificado(empleado: dict, datos_empresa: dict, ruta_salida: str,
     el.append(t_firma_cert)
     el.append(Paragraph(datos_empresa.get("representante",""), estilos["firma_nombre"]))
     el.append(Paragraph(
-        f"Representante Legal — {datos_empresa.get('nombre','')}",
+        f"{datos_empresa.get('_cargo_firmante','Representante Legal')} — {datos_empresa.get('nombre','')}",
         estilos["firma_cargo"]))
     el.append(Paragraph(
         "Documento generado automáticamente. Verifique los datos antes del uso oficial.",
@@ -386,7 +384,7 @@ def generar_vacaciones(empleado: dict, datos_empresa: dict, ruta_salida: str,
     el.append(t_firma_vac)
     el.append(Paragraph(datos_empresa.get("representante",""), estilos["firma_nombre"]))
     el.append(Paragraph(
-        f"Representante Legal — {datos_empresa.get('nombre','')}",
+        f"{datos_empresa.get('_cargo_firmante','Representante Legal')} — {datos_empresa.get('nombre','')}",
         estilos["firma_cargo"]))
 
     _fn = lambda c,d: _pie(c, d, paleta, logo, usar_marca_agua)
@@ -532,7 +530,8 @@ def generar_liquidacion(resultado: dict, datos_empresa: dict, ruta_salida: str,
         nombre_empleado=nombre_e,
         cedula=cedula_e,
         paleta=paleta,
-        estilos=estilos)
+        estilos=estilos,
+        cargo_firmante=datos_empresa.get("_cargo_firmante","Representante Legal"))
 
     el.append(Paragraph(
         "<b>Aviso:</b> Liquidación ESTIMADA (base 360 días). No incluye mora en "

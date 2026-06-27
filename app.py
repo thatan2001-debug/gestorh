@@ -25,8 +25,12 @@ CARPETA_ASSETS  = Path("assets");  CARPETA_ASSETS.mkdir(exist_ok=True)
 PLANTILLA_EXCEL = Path("plantillas/Base_Empleados.xlsx")
 
 # ── Sesión ──────────────────────────────────────────────────────────────────
-for k,v in [("usuario",None),("datos_empresa",{"nombre":"","nit":"",
-    "representante":"","correo_empresa":"","logo_path":None}),
+for k,v in [("usuario",None),("datos_empresa",{
+        "nombre":"","nit":"","representante":"","correo_empresa":"","logo_path":None,
+        "firmante_cert_nombre":"","firmante_cert_cargo":"",
+        "firmante_vac_nombre": "","firmante_vac_cargo": "",
+        "firmante_liq_nombre": "","firmante_liq_cargo": "",
+    }),
     ("df_empleados",None),("archivos_generados",[]),("disenio_seleccionado",1)]:
     if k not in st.session_state: st.session_state[k] = v
 
@@ -165,33 +169,118 @@ if pagina == "🏠  Inicio":
 elif pagina == "🏢  Mi empresa":
     st.markdown("# Datos de tu empresa")
     with st.form("form_empresa"):
-        c1,c2 = st.columns(2)
+        # ── Datos generales ───────────────────────────────────────────────
+        c1, c2 = st.columns(2)
         with c1:
-            nombre     = st.text_input("Razón social *", value=st.session_state.datos_empresa["nombre"], placeholder="Distribuciones ABC SAS")
-            nit        = st.text_input("NIT *", value=st.session_state.datos_empresa["nit"], placeholder="900123456-7")
-            correo_emp = st.text_input("Correo corporativo *", value=st.session_state.datos_empresa.get("correo_empresa",""), placeholder="rrhh@miempresa.com", help="Se usa para enviar documentos a empleados y como remitente en los correos.")
+            nombre     = st.text_input("Razón social *",
+                value=st.session_state.datos_empresa["nombre"],
+                placeholder="Distribuciones ABC SAS")
+            nit        = st.text_input("NIT *",
+                value=st.session_state.datos_empresa["nit"],
+                placeholder="900123456-7")
+            correo_emp = st.text_input("Correo corporativo *",
+                value=st.session_state.datos_empresa.get("correo_empresa",""),
+                placeholder="rrhh@miempresa.com",
+                help="Se usa para enviar documentos y como remitente en correos.")
         with c2:
-            representante = st.text_input("Representante legal *", value=st.session_state.datos_empresa["representante"], placeholder="Nombre completo para la firma")
-            logo = st.file_uploader("Logo / Membrete (PNG o JPG)", type=["png","jpg","jpeg"], help="Aparece en el encabezado de todos los documentos")
+            representante = st.text_input("Representante legal *",
+                value=st.session_state.datos_empresa["representante"],
+                placeholder="Nombre completo — aparece en documentos legales")
+            logo = st.file_uploader("Logo / Membrete (PNG o JPG)",
+                type=["png","jpg","jpeg"],
+                help="Aparece en esquina derecha del encabezado")
 
-        guardar = st.form_submit_button("Guardar datos", type="primary")
+        # ── Responsables de firma ─────────────────────────────────────────
+        st.divider()
+        st.markdown("### ✍️ Responsables de firma")
+        st.caption(
+            "Define quién firma cada tipo de documento. Si no completas estos campos, "
+            "se usará el representante legal. Útil cuando quien firma es el **Líder de RH**, "
+            "**Gerente Administrativo** u otro cargo."
+        )
+        de = st.session_state.datos_empresa
+        rep_default = de.get("representante","") or representante
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.markdown("**📋 Certificados laborales**")
+            fcn = st.text_input("Nombre del firmante",
+                value=de.get("firmante_cert_nombre",""),
+                placeholder=rep_default or "Nombre completo",
+                key="fcn")
+            fcc = st.text_input("Cargo",
+                value=de.get("firmante_cert_cargo",""),
+                placeholder="Líder de Recursos Humanos",
+                key="fcc")
+        with c2:
+            st.markdown("**🏖️ Cartas de vacaciones**")
+            fvn = st.text_input("Nombre del firmante",
+                value=de.get("firmante_vac_nombre",""),
+                placeholder=rep_default or "Nombre completo",
+                key="fvn")
+            fvc = st.text_input("Cargo",
+                value=de.get("firmante_vac_cargo",""),
+                placeholder="Gerente Administrativo",
+                key="fvc")
+        with c3:
+            st.markdown("**💰 Liquidaciones**")
+            fln = st.text_input("Nombre del firmante",
+                value=de.get("firmante_liq_nombre",""),
+                placeholder=rep_default or "Nombre completo",
+                key="fln")
+            flc = st.text_input("Cargo",
+                value=de.get("firmante_liq_cargo",""),
+                placeholder="Representante Legal",
+                key="flc")
+
+        guardar = st.form_submit_button("💾 Guardar datos", type="primary")
         if guardar:
             if not nombre or not nit or not representante or not correo_emp:
-                st.error("Completa todos los campos obligatorios (*).")
+                st.error("Completa los campos obligatorios (*): razón social, NIT, representante y correo.")
             else:
                 logo_path = st.session_state.datos_empresa.get("logo_path")
                 if logo:
                     ext = logo.name.split(".")[-1]
                     logo_path = str(CARPETA_ASSETS / f"logo_empresa.{ext}")
                     with open(logo_path,"wb") as f: f.write(logo.getbuffer())
-                st.session_state.datos_empresa = {"nombre":nombre,"nit":nit,
-                    "representante":representante,"correo_empresa":correo_emp,"logo_path":logo_path}
-                st.success("✅ Datos guardados.")
 
-    if st.session_state.datos_empresa.get("logo_path"):
-        lp = st.session_state.datos_empresa["logo_path"]
-        if Path(lp).exists():
-            st.image(lp, width=120, caption="Logo actual")
+                st.session_state.datos_empresa = {
+                    "nombre":         nombre,
+                    "nit":            nit,
+                    "representante":  representante,
+                    "correo_empresa": correo_emp,
+                    "logo_path":      logo_path,
+                    # Firmantes: si vacío usa el representante legal
+                    "firmante_cert_nombre": fcn.strip() or representante,
+                    "firmante_cert_cargo":  fcc.strip() or "Representante Legal",
+                    "firmante_vac_nombre":  fvn.strip() or representante,
+                    "firmante_vac_cargo":   fvc.strip() or "Representante Legal",
+                    "firmante_liq_nombre":  fln.strip() or representante,
+                    "firmante_liq_cargo":   flc.strip() or "Representante Legal",
+                }
+                st.success("✅ Datos guardados correctamente.")
+
+    # Vista previa de firmantes y logo
+    de = st.session_state.datos_empresa
+    if de.get("representante"):
+        st.divider()
+        st.markdown("**Firmantes configurados actualmente:**")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            n = de.get("firmante_cert_nombre") or de.get("representante","")
+            c = de.get("firmante_cert_cargo")  or "Representante Legal"
+            st.markdown(f"📋 **{n}**  \n*{c}*")
+        with c2:
+            n = de.get("firmante_vac_nombre") or de.get("representante","")
+            c = de.get("firmante_vac_cargo")  or "Representante Legal"
+            st.markdown(f"🏖️ **{n}**  \n*{c}*")
+        with c3:
+            n = de.get("firmante_liq_nombre") or de.get("representante","")
+            c = de.get("firmante_liq_cargo")  or "Representante Legal"
+            st.markdown(f"💰 **{n}**  \n*{c}*")
+
+    if de.get("logo_path") and Path(de["logo_path"]).exists():
+        st.image(de["logo_path"], width=120, caption="Logo actual")
 
     st.divider()
     st.markdown("### Configuración de correo (SMTP)")
@@ -528,6 +617,25 @@ elif pagina == "⚡  Generar docs":
         barra  = st.progress(0, text="Generando…")
         total  = len(df) * tipos
 
+        # ── Preparar datos de firmantes por tipo ─────────────────────────
+        de = datos_empresa
+        rep = de.get("representante","")
+        datos_cert = {**de,
+            "representante": de.get("firmante_cert_nombre") or rep,
+            "_cargo_firmante": de.get("firmante_cert_cargo") or "Representante Legal",
+        }
+        datos_vac = {**de,
+            "representante": de.get("firmante_vac_nombre") or rep,
+            "_cargo_firmante": de.get("firmante_vac_cargo") or "Representante Legal",
+        }
+        datos_liq = {**de,
+            "representante": de.get("firmante_liq_nombre") or rep,
+            "_cargo_firmante": de.get("firmante_liq_cargo") or "Representante Legal",
+        }
+        membrete  = st.session_state.get("membrete_path")
+        usar_mda  = st.session_state.get("usar_marca_agua", False)
+        firma_emp = st.session_state.get("firma_empleado_liq", True)
+
         for paso, (_, fila) in enumerate(df.iterrows()):
             if contador >= limite: break
             empleado = fila.to_dict()
@@ -535,14 +643,14 @@ elif pagina == "⚡  Generar docs":
             pdfs_empleado = []
 
             if gen_cert and contador < limite:
-                # Ingresos variables
                 if tiene_variable == "Sí — usar el valor del Excel por empleado":
                     empleado["Ingreso promedio variable"] = fila.get("Ingreso promedio variable", 0) or 0
                 elif tiene_variable == "Sí — aplicar un valor global a todos":
                     empleado["Ingreso promedio variable"] = ing_variable_global
                 try:
                     ruta = str(CARPETA_SALIDAS / f"Certificado_{nb}.pdf")
-                    generar_certificado(empleado, datos_empresa, ruta, disenio)
+                    generar_certificado(empleado, datos_cert, ruta, disenio,
+                                        usar_mda, membrete)
                     archivos_generados.append(Path(ruta)); pdfs_empleado.append(ruta)
                     contador += 1
                 except Exception as e:
@@ -551,8 +659,10 @@ elif pagina == "⚡  Generar docs":
             if gen_vac and contador < limite:
                 try:
                     ruta = str(CARPETA_SALIDAS / f"Vacaciones_{nb}.pdf")
-                    generar_vacaciones(empleado, datos_empresa, ruta,
-                        fecha_ini_vac.strftime("%d/%m/%Y"), fecha_fin_vac.strftime("%d/%m/%Y"), disenio)
+                    generar_vacaciones(empleado, datos_vac, ruta,
+                        fecha_ini_vac.strftime("%d/%m/%Y"),
+                        fecha_fin_vac.strftime("%d/%m/%Y"),
+                        disenio, usar_mda, membrete)
                     archivos_generados.append(Path(ruta)); pdfs_empleado.append(ruta)
                     contador += 1
                 except Exception as e:
@@ -583,7 +693,8 @@ elif pagina == "⚡  Generar docs":
                 nb = str(res["Nombre"]).strip().replace(" ","_")
                 try:
                     ruta = str(CARPETA_SALIDAS / f"Liquidacion_{nb}.pdf")
-                    generar_liquidacion(res.to_dict(), datos_empresa, ruta, disenio)
+                    generar_liquidacion(res.to_dict(), datos_liq, ruta, disenio,
+                                        usar_mda, membrete, firma_empleado=firma_emp)
                     archivos_generados.append(Path(ruta))
                     contador += 1
                     if enviar_correos:
