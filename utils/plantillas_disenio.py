@@ -44,6 +44,19 @@ PALETAS = {
         "nombre": "Profesional Violeta"},
 }
 
+# ── Márgenes ICONTEC/corporativos ────────────────────────────────────────────
+# Norma ICONTEC / APA adaptada para documentos corporativos colombianos:
+#   Superior:   3.0cm (4.0cm si hay membrete/logo grande en encabezado)
+#   Inferior:   3.0cm
+#   Izquierdo:  3.5cm (extra para archivado/carpeteado sin dañar texto)
+#   Derecho:    2.5cm
+MARGEN_SUP_NORMAL   = 3.0 * cm
+MARGEN_SUP_MEMBRETE = 4.0 * cm   # cuando hay membrete/logo grande
+MARGEN_INF          = 3.0 * cm
+MARGEN_IZQ          = 3.5 * cm
+MARGEN_DER          = 2.5 * cm
+ANCHO_UTIL          = letter[0] - MARGEN_IZQ - MARGEN_DER  # ~12.5cm de texto útil
+
 ANCHO_PAGINA = letter[0]
 ALTO_PAGINA  = letter[1]
 
@@ -63,25 +76,31 @@ def _causa_retiro(motivo: str) -> str:
 
 def _estilos_para(paleta: dict) -> dict:
     base = getSampleStyleSheet()
+    # Fuente 11pt, interlineado 1.5 (16.5pt), tipografía limpia — norma ICONTEC
     return {
         "empresa": ParagraphStyle("empresa", parent=base["Normal"],
-            fontSize=13, fontName="Helvetica-Bold", textColor=paleta["primario"], spaceAfter=1),
+            fontSize=13, fontName="Helvetica-Bold",
+            textColor=paleta["primario"], spaceAfter=1),
         "nit": ParagraphStyle("nit", parent=base["Normal"],
             fontSize=9, textColor=paleta["gris"], spaceAfter=4),
         "titulo": ParagraphStyle("titulo", parent=base["Normal"],
             fontSize=13, fontName="Helvetica-Bold", alignment=TA_CENTER,
-            textColor=paleta["primario"], spaceBefore=6, spaceAfter=12),
+            textColor=paleta["primario"], spaceBefore=8, spaceAfter=14),
         "cuerpo": ParagraphStyle("cuerpo", parent=base["Normal"],
-            fontSize=10.5, leading=16, alignment=TA_JUSTIFY, spaceAfter=10,
+            fontSize=11, leading=16.5,           # 11pt × 1.5 = 16.5pt interlineado
+            alignment=TA_JUSTIFY, spaceAfter=11,
             textColor=paleta["texto"]),
         "firma_nombre": ParagraphStyle("firma_nombre", parent=base["Normal"],
-            fontSize=10, fontName="Helvetica-Bold", textColor=paleta["texto"]),
+            fontSize=10.5, fontName="Helvetica-Bold", textColor=paleta["texto"]),
         "firma_cargo": ParagraphStyle("firma_cargo", parent=base["Normal"],
-            fontSize=9, textColor=paleta["gris"]),
+            fontSize=9.5, textColor=paleta["gris"]),
         "nota": ParagraphStyle("nota", parent=base["Normal"],
-            fontSize=8, textColor=paleta["gris"], alignment=TA_JUSTIFY, spaceBefore=12),
+            fontSize=8.5, textColor=paleta["gris"],
+            alignment=TA_JUSTIFY, spaceBefore=12),
         "paz_salvo": ParagraphStyle("paz_salvo", parent=base["Normal"],
-            fontSize=9.5, leading=14, alignment=TA_JUSTIFY, spaceAfter=8),
+            fontSize=10, leading=15, alignment=TA_JUSTIFY, spaceAfter=8),
+        "tabla_enc": ParagraphStyle("tabla_enc", parent=base["Normal"],
+            fontSize=9, textColor=paleta["gris"]),
     }
 
 
@@ -198,8 +217,8 @@ def _encabezado(el, datos_empresa, estilos, paleta, disenio,
         except Exception:
             pass
 
-    col_texto_w = 11*cm
-    col_logo_w  = 5.5*cm
+    col_logo_w  = 4.5*cm
+    col_texto_w = ANCHO_UTIL - col_logo_w
     # Celda derecha vacía — el canvas dibujará el logo ahí semitransparente
     celda_logo = Paragraph("", ParagraphStyle("vacio"))
 
@@ -309,13 +328,17 @@ def _firmas_dobles(el, representante: str, empresa: str,
 # ══════════════════════════════════════════════════════════════════════════════
 def generar_certificado(empleado: dict, datos_empresa: dict, ruta_salida: str,
                          disenio: int = 1, usar_marca_agua: bool = False,
-                         membrete_path: str = None):
+                         membrete_path: str = None, usar_logo_enc: bool = True):
     paleta  = PALETAS.get(disenio, PALETAS[1])
     estilos = _estilos_para(paleta)
-    logo    = datos_empresa.get("logo_path")
+    logo    = datos_empresa.get("logo_path") if usar_logo_enc else None
+    # Margen superior mayor si hay membrete o logo
+    tiene_membrete = bool(membrete_path and Path(membrete_path).exists())
+    tiene_logo     = bool(logo and Path(logo).exists())
+    margen_sup = MARGEN_SUP_MEMBRETE if (tiene_membrete or tiene_logo) else MARGEN_SUP_NORMAL
     doc = SimpleDocTemplate(ruta_salida, pagesize=letter,
-        topMargin=1.8*cm, bottomMargin=2.2*cm,
-        leftMargin=2.2*cm, rightMargin=2.2*cm)
+        topMargin=margen_sup,  bottomMargin=MARGEN_INF,
+        leftMargin=MARGEN_IZQ, rightMargin=MARGEN_DER)
     el = []
     _encabezado(el, datos_empresa, estilos, paleta, disenio,
                 membrete_path=membrete_path)
@@ -374,13 +397,17 @@ def generar_certificado(empleado: dict, datos_empresa: dict, ruta_salida: str,
 # ══════════════════════════════════════════════════════════════════════════════
 def generar_vacaciones(empleado: dict, datos_empresa: dict, ruta_salida: str,
                         fecha_inicio: str, fecha_fin: str, disenio: int = 1,
-                        usar_marca_agua: bool = False, membrete_path: str = None):
+                        usar_marca_agua: bool = False, membrete_path: str = None,
+                        usar_logo_enc: bool = True):
     paleta  = PALETAS.get(disenio, PALETAS[1])
     estilos = _estilos_para(paleta)
-    logo    = datos_empresa.get("logo_path")
+    logo    = datos_empresa.get("logo_path") if usar_logo_enc else None
+    tiene_membrete = bool(membrete_path and Path(membrete_path).exists())
+    tiene_logo     = bool(logo and Path(logo).exists())
+    margen_sup = MARGEN_SUP_MEMBRETE if (tiene_membrete or tiene_logo) else MARGEN_SUP_NORMAL
     doc = SimpleDocTemplate(ruta_salida, pagesize=letter,
-        topMargin=1.8*cm, bottomMargin=2.2*cm,
-        leftMargin=2.2*cm, rightMargin=2.2*cm)
+        topMargin=margen_sup,  bottomMargin=MARGEN_INF,
+        leftMargin=MARGEN_IZQ, rightMargin=MARGEN_DER)
     el = []
     _encabezado(el, datos_empresa, estilos, paleta, disenio,
                 membrete_path=membrete_path)
@@ -425,13 +452,17 @@ def generar_vacaciones(empleado: dict, datos_empresa: dict, ruta_salida: str,
 # ══════════════════════════════════════════════════════════════════════════════
 def generar_liquidacion(resultado: dict, datos_empresa: dict, ruta_salida: str,
                          disenio: int = 1, usar_marca_agua: bool = False,
-                         membrete_path: str = None, firma_empleado: bool = True):
+                         membrete_path: str = None, firma_empleado: bool = True,
+                         usar_logo_enc: bool = True):
     paleta  = PALETAS.get(disenio, PALETAS[1])
     estilos = _estilos_para(paleta)
-    logo    = datos_empresa.get("logo_path")
+    logo    = datos_empresa.get("logo_path") if usar_logo_enc else None
+    tiene_membrete = bool(membrete_path and Path(membrete_path).exists())
+    tiene_logo     = bool(logo and Path(logo).exists())
+    margen_sup = MARGEN_SUP_MEMBRETE if (tiene_membrete or tiene_logo) else MARGEN_SUP_NORMAL
     doc = SimpleDocTemplate(ruta_salida, pagesize=letter,
-        topMargin=1.8*cm, bottomMargin=2.2*cm,
-        leftMargin=2.2*cm, rightMargin=2.2*cm)
+        topMargin=margen_sup,  bottomMargin=MARGEN_INF,
+        leftMargin=MARGEN_IZQ, rightMargin=MARGEN_DER)
     el = []
     _encabezado(el, datos_empresa, estilos, paleta, disenio,
                 membrete_path=membrete_path)

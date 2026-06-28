@@ -9,6 +9,7 @@ Sistema de autenticación RH Fácil.
 import json
 import hashlib
 from pathlib import Path
+from pathlib import Path
 from datetime import datetime
 
 ARCHIVO_USUARIOS = Path("salidas/.usuarios.json")
@@ -233,3 +234,62 @@ def stats_resumen() -> dict:
             for p in ["gratuito", "basico", "pro", "empresarial"]
         },
     }
+
+# ── Persistencia de datos de empresa por usuario ─────────────────────────────
+
+CAMPOS_EMPRESA = [
+    "nombre", "nit", "representante", "correo_empresa", "logo_path",
+    "firmante_cert_nombre", "firmante_cert_cargo",
+    "firmante_vac_nombre",  "firmante_vac_cargo",
+    "firmante_liq_nombre",  "firmante_liq_cargo",
+    "usar_logo_encabezado", "usar_marca_agua",
+    "disenio_seleccionado", "membrete_path",
+]
+
+
+def guardar_empresa_usuario(email: str, datos_empresa: dict):
+    """
+    Guarda la configuración de empresa del usuario en el JSON de usuarios.
+    Solo guarda los campos relevantes (no rutas de archivos temporales).
+    """
+    email = email.strip().lower()
+    usuarios = _cargar()
+    if email not in usuarios:
+        return False
+    # Guardar solo campos de texto — las rutas de archivos se manejan aparte
+    empresa_guardada = {}
+    for campo in CAMPOS_EMPRESA:
+        if campo in datos_empresa:
+            # No guardar rutas absolutas (pueden cambiar entre deploys)
+            if campo in ("logo_path", "membrete_path"):
+                # Solo guardar el nombre del archivo, no la ruta completa
+                val = datos_empresa.get(campo)
+                empresa_guardada[campo] = Path(val).name if val else None
+            else:
+                empresa_guardada[campo] = datos_empresa.get(campo)
+    usuarios[email]["empresa_config"] = empresa_guardada
+    _guardar(usuarios)
+    return True
+
+
+def cargar_empresa_usuario(email: str) -> dict | None:
+    """
+    Carga la configuración de empresa guardada para el usuario.
+    Retorna None si no tiene configuración guardada.
+    """
+    email = email.strip().lower()
+    usuarios = _cargar()
+    if email not in usuarios:
+        return None
+    config = usuarios[email].get("empresa_config")
+    if not config:
+        return None
+    # Reconstruir rutas absolutas si los archivos existen
+    for campo in ("logo_path", "membrete_path"):
+        nombre_archivo = config.get(campo)
+        if nombre_archivo:
+            ruta_posible = Path("assets") / nombre_archivo
+            config[campo] = str(ruta_posible) if ruta_posible.exists() else None
+        else:
+            config[campo] = None
+    return config

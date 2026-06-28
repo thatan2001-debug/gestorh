@@ -60,6 +60,19 @@ if not st.session_state.usuario:
                 ok, msg, datos = login(email_l, password_l)
                 if ok:
                     st.session_state.usuario = datos
+                    # Cargar empresa guardada del usuario
+                    from utils.auth import cargar_empresa_usuario
+                    empresa_guardada = cargar_empresa_usuario(email_l)
+                    if empresa_guardada:
+                        st.session_state.datos_empresa = {
+                            **st.session_state.datos_empresa,
+                            **empresa_guardada,
+                        }
+                        # Restaurar diseño guardado
+                        if empresa_guardada.get("disenio_seleccionado"):
+                            st.session_state.disenio_seleccionado = empresa_guardada["disenio_seleccionado"]
+                        st.session_state.usar_marca_agua  = empresa_guardada.get("usar_marca_agua", False)
+                        st.session_state.usar_logo_enc    = empresa_guardada.get("usar_logo_encabezado", True)
                     st.rerun()
                 else:
                     st.error(msg)
@@ -257,8 +270,15 @@ elif pagina == "🏢  Mi empresa":
                     "firmante_vac_cargo":   fvc.strip() or "Representante Legal",
                     "firmante_liq_nombre":  fln.strip() or representante,
                     "firmante_liq_cargo":   flc.strip() or "Representante Legal",
+                    # Opciones de logo (se sincronizan desde session_state)
+                    "usar_logo_encabezado": st.session_state.get("usar_logo_enc", True),
+                    "usar_marca_agua":      st.session_state.get("usar_marca_agua", False),
+                    "disenio_seleccionado": st.session_state.get("disenio_seleccionado", 1),
                 }
-                st.success("✅ Datos guardados correctamente.")
+                # Persistir en JSON para que cargue en el próximo login
+                from utils.auth import guardar_empresa_usuario
+                guardar_empresa_usuario(usuario["email"], st.session_state.datos_empresa)
+                st.success("✅ Datos guardados correctamente. Se cargarán automáticamente en tu próximo inicio de sesión.")
 
     # Vista previa de firmantes y logo
     de = st.session_state.datos_empresa
@@ -281,6 +301,116 @@ elif pagina == "🏢  Mi empresa":
 
     if de.get("logo_path") and Path(de["logo_path"]).exists():
         st.image(de["logo_path"], width=120, caption="Logo actual")
+
+    # ── Opciones de logo con sugerencia visual ────────────────────────────
+    st.divider()
+    st.markdown("### 🖼️ Opciones de visualización del logo")
+    st.caption("Configura cómo aparece el logo de tu empresa en los documentos.")
+
+    c1, c2 = st.columns(2)
+    with c1:
+        usar_logo_enc = st.checkbox(
+            "✅ Mostrar logo en el **encabezado** (esquina superior derecha, semitransparente)",
+            value=st.session_state.get("usar_logo_enc", True),
+            help="El logo aparece al 45% de opacidad junto al nombre de la empresa",
+        )
+        st.session_state.usar_logo_enc = usar_logo_enc
+
+        usar_mda = st.checkbox(
+            "💧 Agregar logo como **marca de agua** (fondo de página, muy sutil)",
+            value=st.session_state.get("usar_marca_agua", False),
+            help="El logo aparece al 7% de opacidad en el centro de cada página — da formalismo sin distraer",
+        )
+        st.session_state.usar_marca_agua = usar_mda
+
+        # Guardar en datos_empresa
+        st.session_state.datos_empresa["usar_logo_encabezado"] = usar_logo_enc
+        st.session_state.datos_empresa["usar_marca_agua"]      = usar_mda
+
+    with c2:
+        # Sugerencia visual de cómo queda cada opción
+        st.markdown("**💡 Sugerencia — así queda tu documento:**")
+        if usar_logo_enc and usar_mda:
+            st.markdown("""
+            <div style='border:1.5px solid #DBEAFE;border-radius:10px;padding:10px;background:#F8FAFC;font-size:.82rem'>
+                <div style='display:flex;justify-content:space-between;background:#1B3F6E;
+                    color:white;padding:6px 10px;border-radius:6px;margin-bottom:8px'>
+                    <b>Tu Empresa SAS &nbsp; Nit #900.123</b>
+                    <span style='opacity:.45;font-size:1.2rem'>🏢</span>
+                </div>
+                <div style='text-align:center;color:#9CA3AF;font-size:.7rem;
+                    margin-bottom:6px;position:relative'>
+                    <span style='opacity:.12;font-size:2rem;position:absolute;
+                        left:50%;transform:translateX(-50%)'>🏢</span>
+                    <b>CERTIFICACIÓN LABORAL</b>
+                </div>
+                <div style='color:#374151;font-size:.75rem;line-height:1.5'>
+                    La empresa <b>Tu Empresa SAS</b> certifica que...
+                </div>
+                <div style='color:#10B981;font-size:.72rem;margin-top:6px'>
+                    ✅ Logo en encabezado + marca de agua — máximo formalismo
+                </div>
+            </div>""", unsafe_allow_html=True)
+        elif usar_logo_enc:
+            st.markdown("""
+            <div style='border:1.5px solid #DBEAFE;border-radius:10px;padding:10px;background:#F8FAFC;font-size:.82rem'>
+                <div style='display:flex;justify-content:space-between;background:#1B3F6E;
+                    color:white;padding:6px 10px;border-radius:6px;margin-bottom:8px'>
+                    <b>Tu Empresa SAS &nbsp; Nit #900.123</b>
+                    <span style='opacity:.45;font-size:1.2rem'>🏢</span>
+                </div>
+                <div style='text-align:center;color:#374151;font-size:.75rem;
+                    font-weight:700;margin-bottom:6px'>CERTIFICACIÓN LABORAL</div>
+                <div style='color:#374151;font-size:.75rem;line-height:1.5'>
+                    La empresa <b>Tu Empresa SAS</b> certifica que...
+                </div>
+                <div style='color:#3B82F6;font-size:.72rem;margin-top:6px'>
+                    ✅ Logo suave en encabezado — profesional y limpio
+                </div>
+            </div>""", unsafe_allow_html=True)
+        elif usar_mda:
+            st.markdown("""
+            <div style='border:1.5px solid #DBEAFE;border-radius:10px;padding:10px;background:#F8FAFC;font-size:.82rem'>
+                <div style='background:#1B3F6E;color:white;padding:6px 10px;
+                    border-radius:6px;margin-bottom:8px'>
+                    <b>Tu Empresa SAS &nbsp;&nbsp; Nit #900.123</b>
+                </div>
+                <div style='text-align:center;position:relative;margin-bottom:6px'>
+                    <span style='opacity:.1;font-size:2.5rem;position:absolute;
+                        left:50%;transform:translateX(-50%)'>🏢</span>
+                    <b style='font-size:.75rem'>CERTIFICACIÓN LABORAL</b>
+                </div>
+                <div style='color:#374151;font-size:.75rem;line-height:1.5;margin-top:8px'>
+                    La empresa <b>Tu Empresa SAS</b> certifica que...
+                </div>
+                <div style='color:#7C3AED;font-size:.72rem;margin-top:6px'>
+                    ✅ Solo marca de agua — elegante y discreto
+                </div>
+            </div>""", unsafe_allow_html=True)
+        else:
+            st.markdown("""
+            <div style='border:1.5px solid #E5E7EB;border-radius:10px;padding:10px;background:#F9FAFB;font-size:.82rem'>
+                <div style='background:#1B3F6E;color:white;padding:6px 10px;
+                    border-radius:6px;margin-bottom:8px'>
+                    <b>Tu Empresa SAS &nbsp;&nbsp; Nit #900.123</b>
+                </div>
+                <div style='text-align:center;font-weight:700;font-size:.75rem;
+                    margin-bottom:6px'>CERTIFICACIÓN LABORAL</div>
+                <div style='color:#374151;font-size:.75rem;line-height:1.5'>
+                    La empresa <b>Tu Empresa SAS</b> certifica que...
+                </div>
+                <div style='color:#6B7280;font-size:.72rem;margin-top:6px'>
+                    ℹ️ Sin logo — solo texto (recomendado si usas papel membretado físico)
+                </div>
+            </div>""", unsafe_allow_html=True)
+
+    st.markdown("""
+    <div style='background:#FEF3C7;border-left:3px solid #D97706;border-radius:0 8px 8px 0;
+        padding:8px 12px;font-size:.82rem;color:#92400E;margin-top:8px'>
+        💡 <b>Consejo ICONTEC:</b> Si vas a imprimir en papel membretado físico,
+        desactiva ambas opciones para dejar espacio al membrete preimpreso.
+        El sistema ajusta automáticamente el margen superior a 4.0cm cuando hay logo.
+    </div>""", unsafe_allow_html=True)
 
     st.divider()
     st.markdown("### Configuración de correo (SMTP)")
