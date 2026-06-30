@@ -108,17 +108,24 @@ def _estilos_para(paleta: dict) -> dict:
 def _logo_con_opacidad(logo_path: str, opacidad: float = 0.45) -> str:
     """
     Genera una copia del logo con opacidad reducida a nivel de píxel (PIL).
-    setFillAlpha de ReportLab NO afecta imágenes rasterizadas — hay que
-    modificar el canal alpha directamente con PIL.
-    Cachea el resultado en assets/ para no regenerarlo en cada llamada.
+    El caché se invalida comparando la fecha de modificación del logo fuente.
     """
     try:
         from PIL import Image as PILImage
         Path("assets").mkdir(exist_ok=True)
-        cache = str(Path("assets") / f"logo_enc_{int(opacidad*100)}.png")
-        # Usar caché si ya existe y el logo no cambió
+        logo_mtime = int(Path(logo_path).stat().st_mtime)
+        cache = str(Path("assets") / f"logo_enc_{int(opacidad*100)}_{logo_mtime}.png")
+
         if Path(cache).exists():
             return cache
+
+        # Limpiar caches anteriores del mismo tipo para no acumular archivos
+        for old in Path("assets").glob(f"logo_enc_{int(opacidad*100)}_*.png"):
+            try:
+                old.unlink()
+            except Exception:
+                pass
+
         img = PILImage.open(logo_path).convert("RGBA")
         r, g, b, a = img.split()
         a_nuevo = a.point(lambda px: int(px * opacidad))
@@ -194,21 +201,37 @@ def _pie(canvas_obj, doc, paleta: dict, logo_path: str = None,
 
 
 # ── Encabezado: Nombre+NIT izquierda | Logo derecha ───────────────────────────
+def _logo_platypus(logo_path: str, w: float, h: float, opacidad: float = 0.45):
+    """
+    Devuelve un elemento Image con el logo procesado a la opacidad indicada.
+    Usa PIL para aplicar transparencia real al canal alpha del PNG.
+    """
+    if not logo_path or not Path(logo_path).exists():
+        return Paragraph("", ParagraphStyle("vacio"))
+    try:
+        logo_proc = _logo_con_opacidad(logo_path, opacidad)
+        img = Image(logo_proc, width=w, height=h)
+        img.hAlign = "RIGHT"
+        return img
+    except Exception:
+        return Paragraph("", ParagraphStyle("vacio"))
+
+
 def _encabezado(el, datos_empresa, estilos, paleta, disenio,
                 logo_derecha: bool = True, membrete_path: str = None):
     """
-    Encabezado: Nombre+NIT a la izquierda.
-    El logo se reserva como espacio vacío — lo dibuja el canvas con opacidad 45%
-    para lograr el efecto de membrete suave.
+    Encabezado: Nombre+NIT a la izquierda | Logo (semitransparente) a la derecha.
+    El logo se inserta directamente como Image en el flujo platypus
+    con transparencia real aplicada via PIL — esto garantiza que siempre aparezca.
     """
     nombre = datos_empresa.get("nombre", "")
     nit    = datos_empresa.get("nit", "")
-    logo   = datos_empresa.get("logo_path")
+    logo   = datos_empresa.get("logo_path") if logo_derecha else None
 
     # ── Membrete personalizado desde Word ────────────────────────────────
     if membrete_path and Path(membrete_path).exists():
         try:
-            img_elem = Image(membrete_path, width=17*cm, height=3.5*cm)
+            img_elem = Image(membrete_path, width=ANCHO_UTIL, height=3.5*cm)
             img_elem.hAlign = "CENTER"
             el.append(img_elem)
             el.append(HRFlowable(width="100%", thickness=1,
@@ -217,10 +240,13 @@ def _encabezado(el, datos_empresa, estilos, paleta, disenio,
         except Exception:
             pass
 
-    col_logo_w  = 4.5*cm
+    col_logo_w  = 4.0*cm
     col_texto_w = ANCHO_UTIL - col_logo_w
-    # Celda derecha vacía — el canvas dibujará el logo ahí semitransparente
-    celda_logo = Paragraph("", ParagraphStyle("vacio"))
+
+    # Elemento logo: Image real con transparencia, o celda vacía
+    tiene_logo = bool(logo and Path(logo).exists())
+    celda_logo = _logo_platypus(logo, w=3.5*cm, h=3.5*cm, opacidad=0.45) if tiene_logo \
+                 else Paragraph("", ParagraphStyle("vacio"))
 
     texto_izq = [
         Paragraph(f"<b>{nombre}</b>",
@@ -230,20 +256,8 @@ def _encabezado(el, datos_empresa, estilos, paleta, disenio,
             ParagraphStyle("nn", fontSize=9, textColor=paleta["gris"])),
     ]
 
-    fila = [[texto_izq, celda_logo]]
-    t = Table(fila, colWidths=[col_texto_w, col_logo_w])
-    t.setStyle(TableStyle([
-        ("VALIGN",       (0,0), (-1,-1), "MIDDLE"),
-        ("LEFTPADDING",  (0,0), (-1,-1), 0),
-        ("RIGHTPADDING", (0,0), (-1,-1), 0),
-        ("TOPPADDING",   (0,0), (-1,-1), 0),
-        ("BOTTOMPADDING",(0,0), (-1,-1), 4),
-        # Reservar altura mínima para el logo (2.8cm = ~79pt)
-        ("MINROWHEIGHT", (0,0), (-1,-1), 2.8*cm),
-    ]))
-
     if disenio == 1:
-        # Fondo azul — texto en blanco
+        # Fondo azul — texto en blanco, logo con fondo transparente
         texto_blanco = [
             Paragraph(f"<b><font color='white'>{nombre}</font></b>",
                 ParagraphStyle("hb", fontSize=13, fontName="Helvetica-Bold",
@@ -255,30 +269,37 @@ def _encabezado(el, datos_empresa, estilos, paleta, disenio,
                     colWidths=[col_texto_w, col_logo_w])
         t_b.setStyle(TableStyle([
             ("VALIGN",       (0,0), (-1,-1), "MIDDLE"),
+            ("ALIGN",        (1,0), (1,0),   "RIGHT"),
             ("LEFTPADDING",  (0,0), (-1,-1), 0),
             ("RIGHTPADDING", (0,0), (-1,-1), 0),
             ("TOPPADDING",   (0,0), (-1,-1), 0),
             ("BOTTOMPADDING",(0,0), (-1,-1), 0),
-            ("MINROWHEIGHT", (0,0), (-1,-1), 2.8*cm),
         ]))
-        wrapper = Table([[t_b]], colWidths=[17*cm])
+        wrapper = Table([[t_b]], colWidths=[ANCHO_UTIL])
         wrapper.setStyle(TableStyle([
             ("BACKGROUND",    (0,0), (-1,-1), paleta["primario"]),
-            ("TOPPADDING",    (0,0), (-1,-1), 10),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 10),
+            ("TOPPADDING",    (0,0), (-1,-1), 8),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 8),
             ("LEFTPADDING",   (0,0), (-1,-1), 12),
-            ("RIGHTPADDING",  (0,0), (-1,-1), 12),
+            ("RIGHTPADDING",  (0,0), (-1,-1), 8),
         ]))
         el.append(wrapper)
         el.append(Spacer(1, 8))
-    elif disenio in (4, 5):
-        el.append(t)
-        el.append(HRFlowable(width="100%", thickness=2,
-            color=paleta["secundario"], spaceAfter=8))
     else:
+        t = Table([[texto_izq, celda_logo]], colWidths=[col_texto_w, col_logo_w])
+        t.setStyle(TableStyle([
+            ("VALIGN",       (0,0), (-1,-1), "MIDDLE"),
+            ("ALIGN",        (1,0), (1,0),   "RIGHT"),
+            ("LEFTPADDING",  (0,0), (-1,-1), 0),
+            ("RIGHTPADDING", (0,0), (-1,-1), 0),
+            ("TOPPADDING",   (0,0), (-1,-1), 0),
+            ("BOTTOMPADDING",(0,0), (-1,-1), 4),
+        ]))
         el.append(t)
-        el.append(HRFlowable(width="100%", thickness=1.5,
-            color=paleta["primario"], spaceAfter=8))
+        grosor = 2 if disenio in (4, 5) else 1.5
+        color_linea = paleta["secundario"] if disenio in (4, 5) else paleta["primario"]
+        el.append(HRFlowable(width="100%", thickness=grosor,
+            color=color_linea, spaceAfter=8))
 
 
 # ── Bloque de firmas dobles ───────────────────────────────────────────────────
@@ -352,6 +373,13 @@ def generar_certificado(empleado: dict, datos_empresa: dict, ruta_salida: str,
     texto_var = (f" Adicionalmente, recibe ingresos variables con un promedio mensual "
                  f"de <b>{_fmt(ing_var)}</b>.") if ing_var > 0 else ""
 
+    # Fecha de expedición del documento
+    fecha_expedicion = datetime.today().strftime("%d de %B de %Y").replace(
+        "January","enero").replace("February","febrero").replace("March","marzo"
+        ).replace("April","abril").replace("May","mayo").replace("June","junio"
+        ).replace("July","julio").replace("August","agosto").replace("September","septiembre"
+        ).replace("October","octubre").replace("November","noviembre").replace("December","diciembre")
+
     el.append(Paragraph(
         f"La empresa <b>{datos_empresa.get('nombre','')}</b>, identificada con NIT "
         f"<b>{datos_empresa.get('nit','')}</b>, certifica que "
@@ -362,7 +390,8 @@ def generar_certificado(empleado: dict, datos_empresa: dict, ruta_salida: str,
         f"<b>{_fmt(empleado.get('Salario',0))}</b>.{texto_var}",
         estilos["cuerpo"]))
     el.append(Paragraph(
-        "Se expide a solicitud del interesado(a) para los fines que estime pertinentes.",
+        f"Se expide la presente certificación a solicitud del interesado(a), "
+        f"el día <b>{fecha_expedicion}</b>, para los fines que estime pertinentes.",
         estilos["cuerpo"]))
     el.append(Spacer(1, 32))
     el.append(Paragraph("Cordialmente,", estilos["cuerpo"]))
@@ -412,6 +441,13 @@ def generar_vacaciones(empleado: dict, datos_empresa: dict, ruta_salida: str,
     _encabezado(el, datos_empresa, estilos, paleta, disenio,
                 membrete_path=membrete_path)
     el.append(Paragraph("CARTA DE VACACIONES", estilos["titulo"]))
+
+    fecha_expedicion = datetime.today().strftime("%d de %B de %Y").replace(
+        "January","enero").replace("February","febrero").replace("March","marzo"
+        ).replace("April","abril").replace("May","mayo").replace("June","junio"
+        ).replace("July","julio").replace("August","agosto").replace("September","septiembre"
+        ).replace("October","octubre").replace("November","noviembre").replace("December","diciembre")
+
     el.append(Paragraph(
         f"Señor(a) <b>{empleado.get('Nombre','')}</b>:", estilos["cuerpo"]))
     el.append(Paragraph(
@@ -422,6 +458,9 @@ def generar_vacaciones(empleado: dict, datos_empresa: dict, ruta_salida: str,
     el.append(Paragraph(
         "Le solicitamos entregar sus responsabilidades antes de iniciar el período "
         "de descanso. Para cualquier inquietud, comuníquese con el área administrativa.",
+        estilos["cuerpo"]))
+    el.append(Paragraph(
+        f"La presente carta se expide el día <b>{fecha_expedicion}</b>.",
         estilos["cuerpo"]))
     el.append(Spacer(1, 32))
     el.append(Paragraph("Cordialmente,", estilos["cuerpo"]))

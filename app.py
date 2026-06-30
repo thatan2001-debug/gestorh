@@ -26,7 +26,8 @@ PLANTILLA_EXCEL = Path("plantillas/Base_Empleados.xlsx")
 
 # ── Sesión ──────────────────────────────────────────────────────────────────
 for k,v in [("usuario",None),("datos_empresa",{
-        "nombre":"","nit":"","representante":"","correo_empresa":"","logo_path":None,
+        "nombre":"","nit":"","representante":"","correo_empresa":"",
+        "ciudad":"","logo_path":None,
         "firmante_cert_nombre":"","firmante_cert_cargo":"",
         "firmante_vac_nombre": "","firmante_vac_cargo": "",
         "firmante_liq_nombre": "","firmante_liq_cargo": "",
@@ -195,6 +196,10 @@ elif pagina == "🏢  Mi empresa":
                 value=st.session_state.datos_empresa.get("correo_empresa",""),
                 placeholder="rrhh@miempresa.com",
                 help="Se usa para enviar documentos y como remitente en correos.")
+            ciudad = st.text_input("Ciudad *",
+                value=st.session_state.datos_empresa.get("ciudad",""),
+                placeholder="Barranquilla, Medellín, Bogotá...",
+                help="Aparece en la fecha de expedición del documento")
         with c2:
             representante = st.text_input("Representante legal *",
                 value=st.session_state.datos_empresa["representante"],
@@ -262,6 +267,7 @@ elif pagina == "🏢  Mi empresa":
                     "nit":            nit,
                     "representante":  representante,
                     "correo_empresa": correo_emp,
+                    "ciudad":         ciudad,
                     "logo_path":      logo_path,
                     # Firmantes: si vacío usa el representante legal
                     "firmante_cert_nombre": fcn.strip() or representante,
