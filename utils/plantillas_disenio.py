@@ -88,10 +88,12 @@ def _estilos_para(paleta: dict) -> dict:
             fontSize=9, textColor=paleta["gris"], spaceAfter=4),
         "titulo": ParagraphStyle("titulo", parent=base["Normal"],
             fontSize=13, fontName="Helvetica-Bold", alignment=TA_CENTER,
-            textColor=paleta["primario"], spaceBefore=4, spaceAfter=10),
+            textColor=paleta["primario"],
+            spaceBefore=33,   # doble espacio APA = 2 × 16.5pt antes del título
+            spaceAfter=33),   # doble espacio APA = 2 × 16.5pt después del título
         "cuerpo": ParagraphStyle("cuerpo", parent=base["Normal"],
-            fontSize=11, leading=16.5,           # 11pt × 1.5 = 16.5pt interlineado
-            alignment=TA_JUSTIFY, spaceAfter=11,
+            fontSize=11, leading=16.5,
+            alignment=TA_JUSTIFY, spaceAfter=16.5,  # 1 interlineado entre párrafos
             textColor=paleta["texto"]),
         "firma_nombre": ParagraphStyle("firma_nombre", parent=base["Normal"],
             fontSize=10.5, fontName="Helvetica-Bold", textColor=paleta["texto"]),
@@ -358,7 +360,8 @@ def _encabezado(el, datos_empresa, estilos, paleta, disenio,
         el.append(HRFlowable(width="100%", thickness=2,
             color=paleta["secundario"], spaceAfter=6))
 
-    el.append(Spacer(1, 6))
+    # Sin Spacer adicional aquí — el spaceBefore=33 del título
+    # ya aplica el doble espacio APA entre encabezado y título
 
 
 # ── Bloque de firmas dobles ───────────────────────────────────────────────────
@@ -452,9 +455,9 @@ def generar_certificado(empleado: dict, datos_empresa: dict, ruta_salida: str,
         f"Se expide la presente certificación a solicitud del interesado(a), "
         f"el día <b>{fecha_expedicion}</b>, para los fines que estime pertinentes.",
         estilos["cuerpo"]))
-    el.append(Spacer(1, 32))
+    el.append(Spacer(1, 33))   # doble espacio APA antes de "Cordialmente"
     el.append(Paragraph("Cordialmente,", estilos["cuerpo"]))
-    el.append(Spacer(1, 28))
+    el.append(Spacer(1, 49))   # triple espacio para área de firma (≈3 líneas)
     # Línea alineada a la izquierda, del mismo ancho que el nombre del representante
     t_firma_cert = Table(
         [["", ""]],
