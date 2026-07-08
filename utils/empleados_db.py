@@ -1,219 +1,208 @@
 """
-Gestión de empleados para RH Fácil.
-Persiste en Supabase (tabla empleados) con fallback a JSON local.
-Cada empresa tiene su propio repositorio de empleados.
+Gestión de base de empleados por empresa.
+- CRUD completo: crear, leer, actualizar, desactivar
+- Búsqueda por nombre o documento
+- Importación masiva desde Excel
+- Persistencia en Supabase con fallback JSON
 """
 
 import json
 import pandas as pd
 from pathlib import Path
 from datetime import datetime
-from utils.db import _db, supabase_ok
+from utils.db import _db
 
-# ── Fallback JSON ─────────────────────────────────────────────────────────────
 def _json_path(email: str) -> Path:
-    p = Path("salidas") / f".empleados_{email.split('@')[0]}.json"
+    p = Path("salidas") / f"emp_{email.split('@')[0]}.json"
     p.parent.mkdir(exist_ok=True)
     return p
 
 def _json_load(email: str) -> list:
     p = _json_path(email)
     if p.exists():
-        try:
-            with open(p) as f:
-                return json.load(f)
-        except Exception:
-            pass
+        try: return json.load(open(p, encoding="utf-8"))
+        except: pass
     return []
 
-def _json_save(email: str, empleados: list):
-    with open(_json_path(email), "w") as f:
-        json.dump(empleados, f, indent=2, ensure_ascii=False, default=str)
+def _json_save(email: str, emp: list):
+    with open(_json_path(email), "w", encoding="utf-8") as f:
+        json.dump(emp, f, indent=2, ensure_ascii=False, default=str)
 
-# ── CRUD principal ─────────────────────────────────────────────────────────────
+def _usar_sb(): return _db() is not None
 
-def empleados_listar(email: str) -> list[dict]:
-    """Retorna todos los empleados activos e inactivos de la empresa."""
-    email = email.strip().lower()
-    if supabase_ok():
+# ══════════════════════════════════════════════════════════════════════════════
+# LISTADO Y BÚSQUEDA
+# ══════════════════════════════════════════════════════════════════════════════
+
+def empleados_listar(email: str, solo_activos: bool = True) -> list:
+    sb = _db()
+    if sb:
         try:
-            r = _db().table("empleados") \
-                .select("*") \
-                .eq("email_empresa", email) \
-                .order("nombre") \
-                .execute()
-            return r.data or []
+            q = sb.table("empleados").select("*").eq("email_empresa", email)
+            if solo_activos: q = q.eq("activo", True)
+            return (q.order("nombre").execute().data or [])
         except Exception as e:
-            print(f"Error listando empleados: {e}")
-    return _json_load(email)
+            print(f"Supabase error: {e}")
+    emp = _json_load(email)
+    return [e for e in emp if e.get("activo", True)] if solo_activos else emp
 
 
-def empleados_buscar(email: str, query: str) -> list[dict]:
-    """Busca por nombre o documento (parcial, insensible a mayúsculas)."""
-    query = query.strip().lower()
-    if not query:
-        return empleados_listar(email)
-    todos = empleados_listar(email)
-    return [
-        e for e in todos
-        if query in str(e.get("nombre","")).lower()
-        or query in str(e.get("documento","")).lower()
-    ]
+def empleados_buscar(email: str, termino: str) -> list:
+    termino = termino.strip().lower()
+    if not termino: return empleados_listar(email)
+    todos = empleados_listar(email, solo_activos=False)
+    return [e for e in todos if
+            termino in str(e.get("nombre","")).lower() or
+            termino in str(e.get("documento","")).lower() or
+            termino in str(e.get("cargo","")).lower()]
 
 
-def empleado_guardar(email: str, empleado: dict) -> tuple[bool, str]:
-    """
-    Crea o actualiza un empleado.
-    Si tiene 'id', actualiza. Si no, crea nuevo.
-    Retorna (ok, mensaje).
-    """
-    email = email.strip().lower()
-    ahora = datetime.now().isoformat()
+def empleado_obtener(email: str, documento: str) -> dict | None:
+    sb = _db()
+    if sb:
+        try:
+            r = sb.table("empleados").select("*")\
+                .eq("email_empresa", email).eq("documento", documento)\
+                .single().execute()
+            return r.data
+        except: pass
+    return next((e for e in _json_load(email) if e.get("documento") == documento), None)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# GUARDAR / ACTUALIZAR
+# ══════════════════════════════════════════════════════════════════════════════
+
+def empleado_guardar(email: str, datos: dict) -> tuple[bool, str]:
+    doc    = str(datos.get("documento","")).strip()
+    nombre = str(datos.get("nombre","")).strip()
+    if not doc:    return False, "Documento obligatorio."
+    if not nombre: return False, "Nombre obligatorio."
 
     payload = {
-        "email_empresa":    email,
-        "documento":        str(empleado.get("documento","")).strip(),
-        "nombre":           str(empleado.get("nombre","")).strip(),
-        "cargo":            str(empleado.get("cargo","")).strip(),
-        "salario":          float(empleado.get("salario", 0) or 0),
-        "fecha_ingreso":    str(empleado.get("fecha_ingreso","")).strip(),
-        "fecha_retiro":     str(empleado.get("fecha_retiro","")).strip() or None,
-        "tipo_contrato":    str(empleado.get("tipo_contrato","Indefinido")).strip(),
-        "correo":           str(empleado.get("correo","")).strip(),
-        "cuenta_bancaria":  str(empleado.get("cuenta_bancaria","")).strip(),
-        "activo":           bool(empleado.get("activo", True)),
-        "updated_at":       ahora,
+        "email_empresa":              email,
+        "documento":                  doc,
+        "nombre":                     nombre,
+        "cargo":                      str(datos.get("cargo","")).strip(),
+        "salario":                    float(datos.get("salario", 0) or 0),
+        "fecha_ingreso":              str(datos.get("fecha_ingreso","")).strip(),
+        "fecha_retiro":               str(datos.get("fecha_retiro","")).strip() or None,
+        "tipo_contrato":              datos.get("tipo_contrato","Indefinido"),
+        "correo":                     datos.get("correo",""),
+        "cuenta_bancaria":            datos.get("cuenta_bancaria",""),
+        "tipo_salario":               datos.get("tipo_salario","fijo"),
+        "salario_variable":           float(datos.get("salario_variable", 0) or 0),
+        "ingreso_promedio_variable":  float(datos.get("ingreso_promedio_variable", 0) or 0),
+        "activo":                     datos.get("activo", True),
+        "updated_at":                 datetime.now().isoformat(),
     }
 
-    if not payload["documento"]:
-        return False, "El documento es obligatorio."
-    if not payload["nombre"]:
-        return False, "El nombre es obligatorio."
-
-    if supabase_ok():
+    existe = empleado_obtener(email, doc) is not None
+    sb = _db()
+    if sb:
         try:
-            # Verificar si ya existe por documento+empresa
-            existe = _db().table("empleados") \
-                .select("id") \
-                .eq("email_empresa", email) \
-                .eq("documento", payload["documento"]) \
-                .execute()
-            if existe.data:
-                _db().table("empleados") \
-                    .update(payload) \
-                    .eq("email_empresa", email) \
-                    .eq("documento", payload["documento"]) \
-                    .execute()
-                return True, f"Empleado {payload['nombre']} actualizado."
-            else:
-                payload["created_at"] = ahora
-                _db().table("empleados").insert(payload).execute()
-                return True, f"Empleado {payload['nombre']} agregado."
-        except Exception as e:
-            return False, f"Error guardando empleado: {e}"
-    else:
-        # Fallback JSON
-        lista = _json_load(email)
-        for i, emp in enumerate(lista):
-            if str(emp.get("documento","")) == payload["documento"]:
-                lista[i] = {**emp, **payload}
-                _json_save(email, lista)
-                return True, f"Empleado {payload['nombre']} actualizado."
-        payload["created_at"] = ahora
-        lista.append(payload)
-        _json_save(email, lista)
-        return True, f"Empleado {payload['nombre']} agregado."
-
-
-def empleado_retirar(email: str, documento: str, fecha_retiro: str) -> tuple[bool, str]:
-    """Marca un empleado como inactivo y registra su fecha de retiro."""
-    email = email.strip().lower()
-    if supabase_ok():
-        try:
-            _db().table("empleados") \
-                .update({"activo": False, "fecha_retiro": fecha_retiro,
-                         "updated_at": datetime.now().isoformat()}) \
-                .eq("email_empresa", email) \
-                .eq("documento", documento) \
-                .execute()
-            return True, "Empleado marcado como retirado."
+            sb.table("empleados").upsert(payload,
+                on_conflict="email_empresa,documento").execute()
+            accion = "actualizado" if existe else "creado"
+            return True, f"Empleado {nombre} {accion}."
         except Exception as e:
             return False, f"Error: {e}"
     else:
-        lista = _json_load(email)
-        for emp in lista:
-            if str(emp.get("documento","")) == documento:
-                emp["activo"] = False
-                emp["fecha_retiro"] = fecha_retiro
-        _json_save(email, lista)
-        return True, "Empleado marcado como retirado."
+        emp = _json_load(email)
+        for i, e in enumerate(emp):
+            if e.get("documento") == doc:
+                emp[i] = payload
+                _json_save(email, emp)
+                return True, f"{nombre} actualizado."
+        emp.append(payload)
+        _json_save(email, emp)
+        return True, f"{nombre} creado."
+
+
+def empleado_desactivar(email: str, documento: str) -> tuple[bool, str]:
+    sb = _db()
+    if sb:
+        try:
+            sb.table("empleados").update({"activo": False})\
+                .eq("email_empresa", email).eq("documento", documento).execute()
+            return True, "Empleado marcado como retirado."
+        except Exception as e:
+            return False, str(e)
+    emp = _json_load(email)
+    for e in emp:
+        if e.get("documento") == documento: e["activo"] = False
+    _json_save(email, emp)
+    return True, "Empleado marcado como retirado."
 
 
 def empleado_eliminar(email: str, documento: str) -> tuple[bool, str]:
-    """Elimina permanentemente un empleado."""
-    email = email.strip().lower()
-    if supabase_ok():
+    sb = _db()
+    if sb:
         try:
-            _db().table("empleados") \
-                .delete() \
-                .eq("email_empresa", email) \
-                .eq("documento", documento) \
-                .execute()
-            return True, "Empleado eliminado."
+            sb.table("empleados").delete()\
+                .eq("email_empresa", email).eq("documento", documento).execute()
+            return True, "Eliminado."
         except Exception as e:
-            return False, f"Error: {e}"
-    else:
-        lista = _json_load(email)
-        nueva = [e for e in lista if str(e.get("documento","")) != documento]
-        _json_save(email, nueva)
-        return True, "Empleado eliminado."
+            return False, str(e)
+    emp = [e for e in _json_load(email) if e.get("documento") != documento]
+    _json_save(email, emp)
+    return True, "Eliminado."
 
+# ══════════════════════════════════════════════════════════════════════════════
+# IMPORTACIÓN DESDE EXCEL
+# ══════════════════════════════════════════════════════════════════════════════
 
-def empleados_importar_excel(email: str, df: pd.DataFrame) -> tuple[int, int, list]:
-    """
-    Importa o actualiza empleados desde un DataFrame.
-    Retorna (nuevos, actualizados, errores).
-    """
-    nuevos = actualizados = 0
+def importar_desde_excel(email: str, archivo) -> tuple[int, int, list]:
+    try:
+        df = pd.read_excel(archivo, dtype={"Documento": str})
+        df.columns = [c.strip() for c in df.columns]
+    except Exception as e:
+        return 0, 0, [f"No se pudo leer el Excel: {e}"]
+
+    creados = actualizados = 0
     errores = []
-    for _, fila in df.iterrows():
-        emp = {
-            "documento":       str(fila.get("Documento","")).strip(),
-            "nombre":          str(fila.get("Nombre","")).strip(),
-            "cargo":           str(fila.get("Cargo","")).strip(),
-            "salario":         fila.get("Salario", 0),
-            "fecha_ingreso":   str(fila.get("Fecha ingreso","")).strip(),
-            "fecha_retiro":    str(fila.get("Fecha retiro","")).strip(),
-            "tipo_contrato":   str(fila.get("Tipo contrato","Indefinido")).strip(),
-            "correo":          str(fila.get("Correo","")).strip(),
+
+    for idx, fila in df.iterrows():
+        n = idx + 2
+        doc    = str(fila.get("Documento","")).strip()
+        nombre = str(fila.get("Nombre","")).strip()
+        if not doc or doc.lower() == "nan":
+            errores.append(f"Fila {n}: sin documento"); continue
+        if not nombre or nombre.lower() == "nan":
+            errores.append(f"Fila {n}: sin nombre"); continue
+
+        existe = empleado_obtener(email, doc)
+        ing_var = float(fila.get("Ingreso promedio variable", 0) or 0)
+
+        datos = {
+            "documento": doc, "nombre": nombre,
+            "cargo":     str(fila.get("Cargo","")).strip(),
+            "salario":   fila.get("Salario", 0),
+            "fecha_ingreso": str(fila.get("Fecha ingreso","")).strip(),
+            "fecha_retiro":  "" if pd.isna(fila.get("Fecha retiro","")) else
+                             str(fila.get("Fecha retiro","")).strip(),
+            "tipo_contrato": str(fila.get("Tipo contrato","Indefinido")).strip(),
+            "correo":        str(fila.get("Correo","")).strip(),
             "cuenta_bancaria": str(fila.get("Cuenta bancaria","")).strip(),
-            "activo":          True,
+            "ingreso_promedio_variable": ing_var,
+            "tipo_salario": "variable" if ing_var > 0 else "fijo",
         }
-        if not emp["documento"] or not emp["nombre"]:
-            errores.append(f"Fila sin documento o nombre: {emp}")
-            continue
-
-        # ¿Ya existe?
-        existentes = empleados_buscar(email, emp["documento"])
-        ya_existe = any(str(e.get("documento","")) == emp["documento"]
-                       for e in existentes)
-        ok, msg = empleado_guardar(email, emp)
+        ok, msg = empleado_guardar(email, datos)
         if ok:
-            if ya_existe: actualizados += 1
-            else: nuevos += 1
+            if existe: actualizados += 1
+            else: creados += 1
         else:
-            errores.append(f"{emp['nombre']}: {msg}")
+            errores.append(f"Fila {n} ({nombre}): {msg}")
 
-    return nuevos, actualizados, errores
+    return creados, actualizados, errores
 
 
 def empleados_stats(email: str) -> dict:
-    """Estadísticas rápidas de la base de empleados."""
-    todos = empleados_listar(email)
+    todos     = empleados_listar(email, solo_activos=False)
     activos   = [e for e in todos if e.get("activo", True)]
-    inactivos = [e for e in todos if not e.get("activo", True)]
+    retirados = [e for e in todos if not e.get("activo", True)]
     return {
-        "total":    len(todos),
-        "activos":  len(activos),
-        "retirados": len(inactivos),
+        "total": len(todos), "activos": len(activos),
+        "retirados": len(retirados),
+        "con_variable": sum(1 for e in activos
+            if float(e.get("ingreso_promedio_variable", 0) or 0) > 0),
     }
