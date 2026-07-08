@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RH Fácil — Documentos laborales para PYMES colombianas</title>
+<meta name="description" content="Genera certificados laborales, cartas de vacaciones y liquidaciones en segundos. Cumple la ley colombiana automáticamente.">
+<style>
+  :root {
+    --azul: #1B3F6E; --azul2: #2D6BE4; --azul-cl: #EFF6FF;
+    --verde: #059669; --gris: #6B7280; --texto: #111827;
+    --bg: #ffffff; --bg2: #F8FAFC;
+    --radio: 12px; --sombra: 0 4px 24px rgba(27,63,110,.10);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+         color: var(--texto); background: var(--bg); line-height: 1.6; }
+
+  /* NAV */
+  nav { display:flex; justify-content:space-between; align-items:center;
+        padding:16px 6%; background:var(--bg); border-bottom:1px solid #E5E7EB;
+        position:sticky; top:0; z-index:100; }
+  .logo { font-size:1.25rem; font-weight:700; color:var(--azul); text-decoration:none; }
+  .logo span { color:var(--azul2); }
+  .nav-links { display:flex; gap:24px; align-items:center; }
+  .nav-links a { color:var(--gris); text-decoration:none; font-size:.9rem; }
+  .nav-links a:hover { color:var(--azul); }
+  .btn-nav { background:var(--azul2); color:#fff !important; padding:8px 20px;
+             border-radius:8px; font-weight:600; font-size:.9rem !important; }
+  .btn-nav:hover { background:var(--azul) !important; }
+
+  /* HERO */
+  .hero { background:linear-gradient(135deg, var(--azul) 0%, #0F2547 60%, #1a3a6b 100%);
+          color:#fff; padding:80px 6% 90px; text-align:center; }
+  .hero-badge { display:inline-block; background:rgba(255,255,255,.12);
+                border:1px solid rgba(255,255,255,.25); border-radius:20px;
+                padding:4px 16px; font-size:.8rem; margin-bottom:20px; }
+  .hero h1 { font-size:clamp(2rem,5vw,3.2rem); font-weight:800;
+             line-height:1.15; margin-bottom:20px; letter-spacing:-.02em; }
+  .hero h1 span { color:#93C5FD; }
+  .hero p { font-size:1.15rem; color:rgba(255,255,255,.8); max-width:580px;
+            margin:0 auto 36px; }
+  .hero-btns { display:flex; gap:14px; justify-content:center; flex-wrap:wrap; }
+  .btn-primary { background:var(--azul2); color:#fff; padding:14px 32px;
+                 border-radius:10px; text-decoration:none; font-weight:700;
+                 font-size:1rem; transition:.2s; }
+  .btn-primary:hover { background:#1a5fd4; transform:translateY(-1px); }
+  .btn-outline { background:transparent; color:#fff; padding:14px 32px;
+                 border:2px solid rgba(255,255,255,.4); border-radius:10px;
+                 text-decoration:none; font-weight:600; font-size:1rem; transition:.2s; }
+  .btn-outline:hover { border-color:#fff; background:rgba(255,255,255,.08); }
+
+  /* STATS */
+  .stats { background:#fff; border-top:1px solid #E5E7EB; }
+  .stats-inner { display:flex; justify-content:space-around; flex-wrap:wrap;
+                 max-width:900px; margin:0 auto; padding:32px 6%; gap:20px; }
+  .stat { text-align:center; }
+  .stat-num { font-size:2rem; font-weight:800; color:var(--azul); display:block; }
+  .stat-label { font-size:.85rem; color:var(--gris); }
+
+  /* SECTIONS */
+  section { padding:72px 6%; }
+  .section-tag { font-size:.8rem; font-weight:700; color:var(--azul2);
+                 text-transform:uppercase; letter-spacing:.08em; margin-bottom:10px; }
+  h2 { font-size:clamp(1.6rem,3.5vw,2.2rem); font-weight:800;
+       color:var(--texto); line-height:1.2; margin-bottom:14px; }
+  .section-sub { font-size:1.05rem; color:var(--gris); max-width:560px; }
+
+  /* PROBLEMA / SOLUCIÓN */
+  .problema { background:var(--bg2); }
+  .dolor-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+                gap:20px; margin-top:40px; }
+  .dolor-card { background:#fff; border:1.5px solid #FEE2E2; border-radius:var(--radio);
+                padding:24px; }
+  .dolor-icon { font-size:1.8rem; margin-bottom:10px; }
+  .dolor-card h3 { font-size:1rem; font-weight:700; color:#DC2626; margin-bottom:6px; }
+  .dolor-card p { font-size:.88rem; color:var(--gris); }
+
+  /* CÓMO FUNCIONA */
+  .pasos { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+           gap:28px; margin-top:44px; }
+  .paso { background:var(--bg2); border-radius:var(--radio); padding:28px; }
+  .paso-num { width:40px; height:40px; background:var(--azul2); color:#fff;
+              border-radius:50%; display:flex; align-items:center; justify-content:center;
+              font-weight:800; font-size:1.1rem; margin-bottom:14px; }
+  .paso h3 { font-size:1rem; font-weight:700; margin-bottom:6px; color:var(--azul); }
+  .paso p { font-size:.88rem; color:var(--gris); }
+
+  /* DOCUMENTOS */
+  .docs-bg { background:var(--bg2); }
+  .docs-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+               gap:24px; margin-top:40px; }
+  .doc-card { background:#fff; border-radius:var(--radio); padding:28px;
+              box-shadow:var(--sombra); border-top:4px solid var(--azul2); }
+  .doc-icon { font-size:2rem; margin-bottom:12px; }
+  .doc-card h3 { font-size:1.05rem; font-weight:700; color:var(--azul); margin-bottom:8px; }
+  .doc-card p { font-size:.88rem; color:var(--gris); margin-bottom:14px; }
+  .doc-tag { display:inline-block; background:var(--azul-cl); color:var(--azul2);
+             border-radius:20px; padding:3px 10px; font-size:.75rem; font-weight:600; }
+
+  /* QUIEN */
+  .quien-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+                gap:20px; margin-top:40px; }
+  .quien-card { border:1.5px solid #E5E7EB; border-radius:var(--radio);
+                padding:24px; text-align:center; transition:.2s; }
+  .quien-card:hover { border-color:var(--azul2); box-shadow:var(--sombra); }
+  .quien-icon { font-size:2.5rem; margin-bottom:10px; }
+  .quien-card h3 { font-size:.95rem; font-weight:700; color:var(--texto); }
+  .quien-card p { font-size:.82rem; color:var(--gris); margin-top:4px; }
+
+  /* PLANES */
+  .planes-bg { background:var(--bg2); }
+  .planes-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+                 gap:24px; margin-top:44px; }
+  .plan-card { background:#fff; border-radius:var(--radio); padding:28px;
+               border:2px solid #E5E7EB; transition:.2s; }
+  .plan-card.popular { border-color:var(--azul2);
+                       box-shadow:0 0 0 4px rgba(45,107,228,.08); }
+  .plan-badge { display:inline-block; background:var(--azul2); color:#fff;
+                border-radius:20px; padding:2px 10px; font-size:.72rem;
+                font-weight:700; margin-bottom:12px; }
+  .plan-card h3 { font-size:1rem; font-weight:700; color:var(--texto); margin-bottom:4px; }
+  .plan-precio { font-size:2rem; font-weight:800; color:var(--azul); line-height:1; }
+  .plan-periodo { font-size:.8rem; color:var(--gris); margin-bottom:16px; }
+  .plan-features { list-style:none; }
+  .plan-features li { font-size:.85rem; color:var(--gris); padding:5px 0;
+                      border-bottom:1px solid #F3F4F6; }
+  .plan-features li::before { content:"✓ "; color:var(--verde); font-weight:700; }
+  .plan-btn { display:block; text-align:center; margin-top:20px; padding:10px;
+              border-radius:8px; font-weight:700; font-size:.9rem; text-decoration:none;
+              transition:.2s; }
+  .plan-btn-solid { background:var(--azul2); color:#fff; }
+  .plan-btn-solid:hover { background:var(--azul); }
+  .plan-btn-outline { border:2px solid var(--azul2); color:var(--azul2); }
+  .plan-btn-outline:hover { background:var(--azul-cl); }
+
+  /* LEGAL */
+  .legal-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+                gap:20px; margin-top:36px; }
+  .legal-item { display:flex; gap:12px; align-items:flex-start; }
+  .legal-icon { font-size:1.5rem; flex-shrink:0; margin-top:2px; }
+  .legal-item h3 { font-size:.95rem; font-weight:700; margin-bottom:4px; color:var(--texto); }
+  .legal-item p { font-size:.83rem; color:var(--gris); }
+
+  /* CTA */
+  .cta { background:linear-gradient(135deg,var(--azul),#0F2547); color:#fff;
+         text-align:center; padding:72px 6%; }
+  .cta h2 { color:#fff; font-size:clamp(1.6rem,3.5vw,2.2rem); margin-bottom:14px; }
+  .cta p { color:rgba(255,255,255,.8); font-size:1.05rem; margin-bottom:32px; }
+
+  /* FOOTER */
+  footer { background:#0F2547; color:rgba(255,255,255,.6);
+           text-align:center; padding:28px 6%; font-size:.85rem; }
+  footer a { color:rgba(255,255,255,.5); text-decoration:none; }
+  footer a:hover { color:#fff; }
+
+  /* AVISO LEGAL */
+  .aviso { background:#FEF9C3; border:1px solid #FDE047; border-radius:8px;
+           padding:14px 18px; margin:32px 0 0; font-size:.83rem; color:#713F12; }
+
+  @media (max-width:640px) {
+    .nav-links { gap:12px; }
+    .hero { padding:52px 5% 60px; }
+    .hero-btns { flex-direction:column; align-items:center; }
+    .btn-primary, .btn-outline { width:100%; max-width:280px; text-align:center; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="#" class="logo">RH<span>Fácil</span></a>
+  <div class="nav-links">
+    <a href="#como-funciona">Cómo funciona</a>
+    <a href="#planes">Planes</a>
+    <a href="#documentos">Documentos</a>
+    <a href="https://rhfacil.co/app" class="btn-nav">Ingresar →</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-badge">✅ Actualizado con CST 2026 — SMMLV $1.750.905</div>
+  <h1>Genera documentos laborales<br><span>en segundos, no en horas</span></h1>
+  <p>Certificados, cartas de vacaciones y liquidaciones de prestaciones sociales para tus empleados. Cumplimiento legal colombiano automático.</p>
+  <div class="hero-btns">
+    <a href="https://rhfacil.co/app" class="btn-primary">Empezar gratis →</a>
+    <a href="#como-funciona" class="btn-outline">Ver cómo funciona</a>
+  </div>
+</div>
+
+<!-- STATS -->
+<div class="stats">
+  <div class="stats-inner">
+    <div class="stat"><span class="stat-num">3 seg</span><span class="stat-label">por certificado</span></div>
+    <div class="stat"><span class="stat-num">6</span><span class="stat-label">conceptos de liquidación</span></div>
+    <div class="stat"><span class="stat-num">5</span><span class="stat-label">diseños profesionales</span></div>
+    <div class="stat"><span class="stat-num">100%</span><span class="stat-label">ley colombiana 2026</span></div>
+  </div>
+</div>
+
+<!-- PROBLEMA -->
+<section class="problema" id="problema">
+  <div class="section-tag">El problema que resolvemos</div>
+  <h2>¿Cuánto tiempo pierdes en documentos laborales?</h2>
+  <p class="section-sub">Las PYMES colombianas generan cientos de documentos laborales al año, uno por uno, en Word o Excel.</p>
+  <div class="dolor-grid">
+    <div class="dolor-card">
+      <div class="dolor-icon">⏱️</div>
+      <h3>15–30 min por certificado</h3>
+      <p>Buscar la plantilla, llenar los datos, revisar, guardar, enviar. Multiplicado por todos los empleados.</p>
+    </div>
+    <div class="dolor-card">
+      <div class="dolor-icon">❌</div>
+      <h3>Errores en liquidaciones</h3>
+      <p>Fórmulas incorrectas, fechas mal calculadas, conceptos olvidados. Un error puede costar multas.</p>
+    </div>
+    <div class="dolor-card">
+      <div class="dolor-icon">📂</div>
+      <h3>Sin trazabilidad</h3>
+      <p>¿Quién generó qué documento y cuándo? Con Word y correos sueltos, es imposible saberlo.</p>
+    </div>
+    <div class="dolor-card">
+      <div class="dolor-icon">⚖️</div>
+      <h3>Riesgo legal constante</h3>
+      <p>Cada año cambia el SMMLV, los porcentajes de aportes, las normas ICONTEC. ¿Estás al día?</p>
+    </div>
+  </div>
+</section>
+
+<!-- CÓMO FUNCIONA -->
+<section id="como-funciona">
+  <div class="section-tag">Solución</div>
+  <h2>Tres pasos y listo</h2>
+  <p class="section-sub">No necesitas saber de leyes laborales ni de tecnología. Solo ingresa los datos básicos.</p>
+  <div class="pasos">
+    <div class="paso">
+      <div class="paso-num">1</div>
+      <h3>Registra tu empresa</h3>
+      <p>NIT, nombre, representante legal y firmantes. Se guarda una sola vez y se usa en todos los documentos.</p>
+    </div>
+    <div class="paso">
+      <div class="paso-num">2</div>
+      <h3>Sube tus empleados</h3>
+      <p>Descarga nuestra plantilla Excel, llénala con los datos de tu personal y súbela. En segundos.</p>
+    </div>
+    <div class="paso">
+      <div class="paso-num">3</div>
+      <h3>Genera y entrega</h3>
+      <p>Selecciona el tipo de documento, haz clic en generar. Descarga el ZIP o envía directamente al correo de cada empleado.</p>
+    </div>
+  </div>
+</section>
+
+<!-- DOCUMENTOS -->
+<section class="docs-bg" id="documentos">
+  <div class="section-tag">Lo que genera</div>
+  <h2>Todos los documentos que tu empresa necesita</h2>
+  <p class="section-sub">Generados con normas ICONTEC, márgenes profesionales y tu logo corporativo.</p>
+  <div class="docs-grid">
+    <div class="doc-card">
+      <div class="doc-icon">📋</div>
+      <h3>Certificado laboral</h3>
+      <p>Con cargo, salario, fecha de ingreso, tipo de contrato e ingresos variables si aplica. Incluye fecha de expedición.</p>
+      <span class="doc-tag">Art. CST</span>
+    </div>
+    <div class="doc-card">
+      <div class="doc-icon">🏖️</div>
+      <h3>Carta de vacaciones</h3>
+      <p>Con período exacto de inicio y fin, nombre del empleado y firma del responsable de RRHH.</p>
+      <span class="doc-tag">Art. 186 CST</span>
+    </div>
+    <div class="doc-card">
+      <div class="doc-icon">💰</div>
+      <h3>Liquidación de prestaciones</h3>
+      <p>Cesantías, intereses, prima semestral, vacaciones, salario pendiente e indemnización si aplica. Con paz y salvo y firmas.</p>
+      <span class="doc-tag">Art. 64, 249, 306 CST</span>
+    </div>
+  </div>
+  <div class="aviso">
+    ⚖️ <strong>Aviso legal:</strong> Las liquidaciones son estimaciones de referencia calculadas con las fórmulas del CST. No reemplazan el concepto de un contador o abogado laboral. Valide siempre antes de realizar pagos oficiales.
+  </div>
+</section>
+
+<!-- QUIÉN -->
+<section>
+  <div class="section-tag">¿Para quién es?</div>
+  <h2>Ideal para empresas de 1 a 500 empleados</h2>
+  <div class="quien-grid">
+    <div class="quien-card">
+      <div class="quien-icon">🏢</div>
+      <h3>PYMES</h3>
+      <p>Empresas con área administrativa pequeña que necesitan eficiencia</p>
+    </div>
+    <div class="quien-card">
+      <div class="quien-icon">🧮</div>
+      <h3>Contadores</h3>
+      <p>Maneja varios clientes desde una sola cuenta Empresarial</p>
+    </div>
+    <div class="quien-card">
+      <div class="quien-icon">⚖️</div>
+      <h3>Firmas laborales</h3>
+      <p>Genera documentos para múltiples empresas clientes</p>
+    </div>
+    <div class="quien-card">
+      <div class="quien-icon">🤝</div>
+      <h3>Outsourcing RH</h3>
+      <p>Empresas que gestionan nómina y RRHH para terceros</p>
+    </div>
+    <div class="quien-card">
+      <div class="quien-icon">🏪</div>
+      <h3>Comercios locales</h3>
+      <p>Restaurantes, tiendas, servicios con 2 a 20 empleados</p>
+    </div>
+    <div class="quien-card">
+      <div class="quien-icon">🏗️</div>
+      <h3>Construcción</h3>
+      <p>Proyectos con contratos por obra o labor de corta duración</p>
+    </div>
+  </div>
+</section>
+
+<!-- PLANES -->
+<section class="planes-bg" id="planes">
+  <div class="section-tag">Precios</div>
+  <h2>Sin sorpresas. Sin letra pequeña.</h2>
+  <p class="section-sub">Empieza gratis. Actualiza cuando necesites más.</p>
+  <div class="planes-grid">
+    <div class="plan-card">
+      <h3>Gratuito</h3>
+      <div class="plan-precio">Gratis</div>
+      <div class="plan-periodo">Para probar</div>
+      <ul class="plan-features">
+        <li>5 documentos en total</li>
+        <li>3 días de acceso</li>
+        <li>Certificados laborales</li>
+        <li>Cartas de vacaciones</li>
+        <li>Liquidaciones básicas</li>
+      </ul>
+      <a href="https://rhfacil.co/app" class="plan-btn plan-btn-outline">Empezar gratis</a>
+    </div>
+    <div class="plan-card popular">
+      <div class="plan-badge">⭐ Más popular</div>
+      <h3>Básico</h3>
+      <div class="plan-precio">$29.900</div>
+      <div class="plan-periodo">COP / mes</div>
+      <ul class="plan-features">
+        <li>Hasta 50 documentos/mes</li>
+        <li>Todos los tipos de documento</li>
+        <li>Tu logo en documentos</li>
+        <li>5 diseños de plantilla</li>
+        <li>Soporte por WhatsApp</li>
+      </ul>
+      <a href="https://rhfacil.co/app" class="plan-btn plan-btn-solid">Activar →</a>
+    </div>
+    <div class="plan-card">
+      <h3>Pro</h3>
+      <div class="plan-precio">$69.900</div>
+      <div class="plan-periodo">COP / mes</div>
+      <ul class="plan-features">
+        <li>Documentos ilimitados</li>
+        <li>Todo lo del plan Básico</li>
+        <li>Marca de agua corporativa</li>
+        <li>Envío por correo masivo</li>
+        <li>Soporte prioritario</li>
+      </ul>
+      <a href="https://rhfacil.co/app" class="plan-btn plan-btn-outline">Activar →</a>
+    </div>
+    <div class="plan-card">
+      <h3>Empresarial</h3>
+      <div class="plan-precio">$149.900</div>
+      <div class="plan-periodo">COP / mes</div>
+      <ul class="plan-features">
+        <li>Todo lo del plan Pro</li>
+        <li>Múltiples empresas</li>
+        <li>Ideal para contadores</li>
+        <li>Capacitación incluida</li>
+        <li>Gerente de cuenta</li>
+      </ul>
+      <a href="https://rhfacil.co/app" class="plan-btn plan-btn-outline">Activar →</a>
+    </div>
+  </div>
+</section>
+
+<!-- LEGAL / CUMPLIMIENTO -->
+<section>
+  <div class="section-tag">Cumplimiento legal</div>
+  <h2>Construido sobre la ley colombiana</h2>
+  <p class="section-sub">Cada cálculo y cada documento siguen la normativa vigente.</p>
+  <div class="legal-grid">
+    <div class="legal-item">
+      <div class="legal-icon">📐</div>
+      <div>
+        <h3>Normas ICONTEC / APA</h3>
+        <p>Márgenes, interlineado y tipografía siguiendo estándares corporativos colombianos</p>
+      </div>
+    </div>
+    <div class="legal-item">
+      <div class="legal-icon">💼</div>
+      <div>
+        <h3>CST 2026 actualizado</h3>
+        <p>SMMLV $1.750.905 · Auxilio transporte $249.095 · Arts. 64, 186, 249, 306</p>
+      </div>
+    </div>
+    <div class="legal-item">
+      <div class="legal-icon">🔒</div>
+      <div>
+        <h3>Ley 1581 de 2012</h3>
+        <p>Protección de datos personales. Tus empleados están protegidos.</p>
+      </div>
+    </div>
+    <div class="legal-item">
+      <div class="legal-icon">📊</div>
+      <div>
+        <h3>Seguridad social correcta</h3>
+        <p>Descuentos EPS (4%) y Pensión (4%) calculados automáticamente en liquidaciones</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA FINAL -->
+<div class="cta">
+  <h2>Tu empresa merece documentos profesionales</h2>
+  <p>Únete a las PYMES colombianas que ya ahorran horas cada semana con RH Fácil.</p>
+  <a href="https://rhfacil.co/app" class="btn-primary">Crear cuenta gratis →</a>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <p style="margin-bottom:8px">
+    <a href="#">Términos y condiciones</a> &nbsp;·&nbsp;
+    <a href="#">Política de privacidad</a> &nbsp;·&nbsp;
+    <a href="#">Ley 1581 de 2012</a> &nbsp;·&nbsp;
+    <a href="mailto:soporte@rhfacil.co">soporte@rhfacil.co</a>
+  </p>
+  <p>© 2026 RH Fácil · Medellín, Colombia · Hecho con ❤️ para las PYMES colombianas</p>
+  <p style="margin-top:8px;font-size:.75rem">
+    Las liquidaciones son estimaciones de referencia. No reemplazan el concepto de un profesional contable o jurídico.
+  </p>
+</footer>
+
+</body>
+</html>
