@@ -1,170 +1,249 @@
 """
-Control de planes y límites de uso — RH Fácil.
-
-Plan Gratuito: 5 documentos O 3 días desde el primer uso, lo que llegue primero.
-Los datos se guardan en un archivo local JSON (por sesión de servidor).
-Para producción real con múltiples usuarios, migrar a SQLite o Supabase.
+Control de planes y límites — RH Fácil.
+Planes ajustados al modelo de negocio real para PYMES colombianas.
 """
 
-import json
 import os
-from datetime import datetime, timedelta
-from pathlib import Path
 
+WHATSAPP_NUMERO = os.getenv("WHATSAPP_NUMERO", "573001234567")
+
+# ── Definición de planes ────────────────────────────────────────────────────
 PLANES = {
     "gratuito": {
-        "nombre": "Gratuito",
-        "precio": 0,
-        "max_documentos": 5,
-        "dias_prueba": 3,
-        "descripcion": "Ideal para probar la herramienta",
+        "nombre":          "Gratuito",
+        "precio":          0,
+        "precio_fmt":      "Gratis",
+        "descripcion":     "Para conocer la herramienta",
+        "limite_empleados": 5,
+        "limite_docs_mes":  5,
+        "limite_total":     5,
+        "dias_prueba":      None,
+        "tiene_limite":    True,
+        "multiempresa":    False,
+        "marca_agua_rh":   True,     # Documentos con "Generado con RH Fácil"
         "features": [
+            "1 empresa",
+            "Hasta 5 empleados",
             "Hasta 5 documentos en total",
-            "3 días de acceso",
-            "Certificados laborales",
-            "Cartas de vacaciones",
-            "Liquidaciones básicas",
+            "Certificado laboral con/sin salario",
+            "Carta de vacaciones",
+            "Descarga en PDF",
+            'Marca "Generado con RH Fácil"',
         ],
-        "limite": True,
-        "whatsapp": False,
+        "documentos_habilitados": [
+            "certificado_con_salario",
+            "certificado_sin_salario",
+            "carta_vacaciones",
+        ],
+        "color_badge": "#6B7280",
+        "badge": "Gratis",
     },
+
     "basico": {
-        "nombre": "Básico",
-        "precio": 29900,
-        "max_documentos": 50,
-        "dias_prueba": None,
-        "descripcion": "Para pequeñas empresas",
+        "nombre":          "Básico",
+        "precio":          39900,
+        "precio_fmt":      "$39.900",
+        "descripcion":     "Para PYMES con equipo pequeño",
+        "limite_empleados": 30,
+        "limite_docs_mes":  100,
+        "limite_total":    None,
+        "dias_prueba":     None,
+        "tiene_limite":    True,
+        "multiempresa":    False,
+        "marca_agua_rh":   False,
         "features": [
-            "Hasta 50 documentos al mes",
-            "Certificados laborales",
-            "Cartas de vacaciones",
-            "Liquidaciones básicas",
+            "1 empresa",
+            "Hasta 30 empleados",
+            "100 documentos por mes",
+            "Todo lo del plan Gratuito",
+            "Paz y salvo laboral",
+            "Autorizaciones de descuento",
+            "Autorización tratamiento de datos",
+            "Carta de ingresos",
+            "Actas de entrega",
+            "Permisos y licencias",
+            "Descarga PDF sin marca de agua",
             "Soporte por WhatsApp",
         ],
-        "limite": True,
-        "whatsapp": True,
+        "documentos_habilitados": [
+            "certificado_con_salario", "certificado_sin_salario",
+            "carta_vacaciones", "solicitud_vacaciones",
+            "paz_salvo", "autorizacion_descuento", "autorizacion_datos",
+            "carta_ingresos", "acta_entrega_cargo", "acta_entrega_equipos",
+            "entrega_dotacion", "permiso_remunerado", "permiso_no_remunerado",
+            "licencia_no_remunerada",
+        ],
+        "color_badge": "#2D6BE4",
+        "badge": "⭐ Popular",
     },
+
     "pro": {
-        "nombre": "Pro",
-        "precio": 69900,
-        "max_documentos": 9999,
-        "dias_prueba": None,
-        "descripcion": "Para empresas en crecimiento",
+        "nombre":          "Pro",
+        "precio":          89900,
+        "precio_fmt":      "$89.900",
+        "descripcion":     "Para empresas en crecimiento",
+        "limite_empleados": 100,
+        "limite_docs_mes":  500,
+        "limite_total":    None,
+        "dias_prueba":     None,
+        "tiene_limite":    False,  # "ilimitados razonables"
+        "multiempresa":    False,
+        "marca_agua_rh":   False,
         "features": [
+            "1 empresa",
+            "Hasta 100 empleados",
             "Documentos ilimitados",
-            "Todos los documentos del plan Básico",
+            "Todo lo del plan Básico",
+            "Contratos laborales (fijo, indefinido, obra)",
+            "Contrato prestación de servicios",
+            "Carta de terminación de contrato",
+            "Carta de no renovación",
+            "Liquidación de prestaciones",
+            "Llamados de atención y descargos",
+            "Cambio de salario / cambio de cargo",
             "Logo de empresa en documentos",
-            "Plantillas personalizadas",
+            "Historial por empleado",
+            "Envío por correo electrónico",
             "Soporte prioritario",
         ],
-        "limite": False,
-        "whatsapp": True,
+        "documentos_habilitados": "todos",  # todos los implementados
+        "color_badge": "#1B3F6E",
+        "badge": "Pro",
     },
+
     "empresarial": {
-        "nombre": "Empresarial",
-        "precio": 149900,
-        "max_documentos": 9999,
-        "dias_prueba": None,
-        "descripcion": "Para contadores y outsourcing",
+        "nombre":          "Empresarial",
+        "precio":          199900,
+        "precio_fmt":      "$199.900",
+        "descripcion":     "Para contadores y outsourcing de RH",
+        "limite_empleados": None,   # sin límite
+        "limite_docs_mes":  None,
+        "limite_total":    None,
+        "dias_prueba":     None,
+        "tiene_limite":    False,
+        "multiempresa":    True,
+        "marca_agua_rh":   False,
         "features": [
+            "Multiempresa (clientes ilimitados)",
+            "Empleados ilimitados",
+            "Documentos ilimitados",
             "Todo lo del plan Pro",
-            "Múltiples empresas",
-            "API de integración (próximamente)",
-            "Capacitación personalizada",
+            "Historial completo por empresa",
+            "Plantillas personalizadas",
+            "Exportación de datos",
+            "Reportes y estadísticas",
+            "Capacitación incluida",
             "Gerente de cuenta dedicado",
+            "Soporte prioritario 24/7",
         ],
-        "limite": False,
-        "whatsapp": True,
+        "documentos_habilitados": "todos",
+        "color_badge": "#059669",
+        "badge": "Empresarial",
     },
 }
 
-ARCHIVO_ESTADO = Path("salidas/.uso_plan.json")
-WHATSAPP_NUMERO = "573001234567"  # Cambiar por número real
+PLAN_ORDEN = ["gratuito", "basico", "pro", "empresarial"]
 
 
-def _cargar_estado():
-    if ARCHIVO_ESTADO.exists():
-        try:
-            with open(ARCHIVO_ESTADO) as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return None
+def plan_permite_documento(plan: str, tipo_documento: str) -> bool:
+    """Verifica si el plan habilita un tipo de documento específico."""
+    info = PLANES.get(plan, PLANES["gratuito"])
+    habilitados = info.get("documentos_habilitados", [])
+    if habilitados == "todos":
+        return True
+    return tipo_documento in habilitados
 
 
-def _guardar_estado(estado: dict):
-    ARCHIVO_ESTADO.parent.mkdir(exist_ok=True)
-    with open(ARCHIVO_ESTADO, "w") as f:
-        json.dump(estado, f)
+def plan_permite_empleado(plan: str, num_empleados_actuales: int) -> bool:
+    """Verifica si el plan permite agregar más empleados."""
+    info = PLANES.get(plan, PLANES["gratuito"])
+    limite = info.get("limite_empleados")
+    if limite is None:
+        return True
+    return num_empleados_actuales < limite
 
 
-def inicializar_plan():
-    """Crea el estado inicial si no existe. Retorna el estado actual."""
-    estado = _cargar_estado()
-    if estado is None:
-        estado = {
-            "plan": "gratuito",
-            "documentos_usados": 0,
-            "primera_vez": datetime.now().isoformat(),
-            "activo": True,
-        }
-        _guardar_estado(estado)
-    return estado
+def plan_permite_doc_mes(plan: str, docs_este_mes: int) -> tuple[bool, int | None]:
+    """Verifica si el plan permite generar más documentos este mes."""
+    info = PLANES.get(plan, PLANES["gratuito"])
+    limite = info.get("limite_docs_mes")
+    if limite is None:
+        return True, None
+    return docs_este_mes < limite, limite - docs_este_mes
 
 
-def obtener_estado_plan():
-    """Retorna dict con info completa del plan actual y sus límites."""
-    estado = inicializar_plan()
-    plan_key = estado.get("plan", "gratuito")
-    plan_info = PLANES[plan_key]
+def docs_restantes_totales(plan: str, docs_usados: int) -> int | None:
+    """Retorna documentos restantes totales o None si no tiene límite."""
+    info = PLANES.get(plan, PLANES["gratuito"])
+    limite = info.get("limite_total")
+    if limite is None:
+        return None
+    return max(0, limite - docs_usados)
 
-    docs_usados = estado.get("documentos_usados", 0)
-    primera_vez = datetime.fromisoformat(estado.get("primera_vez", datetime.now().isoformat()))
-    dias_transcurridos = (datetime.now() - primera_vez).days
 
-    # Verificar si el plan gratuito expiró
-    plan_expirado = False
-    razon_expiracion = ""
-    if plan_key == "gratuito":
-        if docs_usados >= plan_info["max_documentos"]:
-            plan_expirado = True
-            razon_expiracion = f"Alcanzaste el límite de {plan_info['max_documentos']} documentos gratuitos"
-        elif dias_transcurridos >= plan_info["dias_prueba"]:
-            plan_expirado = True
-            razon_expiracion = f"Tu período de prueba de {plan_info['dias_prueba']} días ha terminado"
-
-    docs_restantes = max(0, plan_info["max_documentos"] - docs_usados) if plan_info["limite"] else None
-    dias_restantes = max(0, plan_info["dias_prueba"] - dias_transcurridos) if plan_key == "gratuito" else None
-
+def obtener_limite_plan(plan: str) -> dict:
+    """Retorna límites del plan en formato compatible con el resto del código."""
+    info = PLANES.get(plan, PLANES["gratuito"])
     return {
-        "plan_key": plan_key,
-        "plan_nombre": plan_info["nombre"],
-        "plan_precio": plan_info["precio"],
-        "documentos_usados": docs_usados,
-        "documentos_max": plan_info["max_documentos"],
-        "documentos_restantes": docs_restantes,
-        "dias_restantes": dias_restantes,
-        "plan_expirado": plan_expirado,
-        "razon_expiracion": razon_expiracion,
-        "puede_generar": not plan_expirado,
-        "features": plan_info["features"],
-        "limite": plan_info["limite"],
+        "max_docs":       info.get("limite_total") or info.get("limite_docs_mes") or 9999,
+        "tiene_limite":   info.get("tiene_limite", True),
+        "max_empleados":  info.get("limite_empleados"),
+        "multiempresa":   info.get("multiempresa", False),
+        "marca_agua_rh":  info.get("marca_agua_rh", False),
     }
-
-
-def registrar_uso(cantidad_docs: int):
-    """Suma documentos generados al contador."""
-    estado = inicializar_plan()
-    estado["documentos_usados"] = estado.get("documentos_usados", 0) + cantidad_docs
-    _guardar_estado(estado)
 
 
 def link_whatsapp(mensaje: str = "") -> str:
     """Genera link de WhatsApp con mensaje pre-escrito."""
-    if not mensaje:
-        mensaje = (
-            "Hola, quiero suscribirme a RH Fácil. "
-            "¿Me pueden dar información sobre los planes disponibles?"
-        )
     import urllib.parse
+    if not mensaje:
+        mensaje = "Hola, quiero suscribirme a RH Fácil. ¿Me pueden dar información sobre los planes disponibles?"
     return f"https://wa.me/{WHATSAPP_NUMERO}?text={urllib.parse.quote(mensaje)}"
+
+
+def link_whatsapp_plan(plan: str) -> str:
+    """Link de WhatsApp para activar un plan específico."""
+    info = PLANES.get(plan, {})
+    precio = info.get("precio_fmt", "")
+    nombre = info.get("nombre", plan)
+    msg = (
+        f"Hola, quiero activar el plan {nombre} de RH Fácil "
+        f"({precio}/mes). ¿Cómo procedo?"
+    )
+    return link_whatsapp(msg)
+
+
+# ── Textos comerciales seguros ────────────────────────────────────────────────
+MENSAJE_PRINCIPAL = (
+    "RH Fácil te ayuda a generar documentos laborales profesionales "
+    "para tu empresa en minutos, usando los datos de tus empleados, "
+    "el logo de tu empresa y plantillas organizadas, listas para revisar, "
+    "firmar, descargar o enviar."
+)
+
+DISCLAIMER_DOCUMENTOS = (
+    "⚖️ Aviso: Los documentos generados por RH Fácil son de referencia. "
+    "No constituyen asesoría legal, laboral, contable ni tributaria. "
+    "Valide siempre con su contador o abogado antes de firmar o usar para pagos reales."
+)
+
+DISCLAIMER_LIQUIDACIONES = (
+    "⚠️ Estimación de referencia: Esta liquidación se calcula con las fórmulas "
+    "generales del CST. No incluye: salario integral, mora en cesantías, "
+    "embargos, incapacidades, horas extras ni casos especiales. "
+    "Valide con su contador antes de realizar el pago."
+)
+
+FRASES_EVITAR = [
+    "Cumple automáticamente la ley",
+    "100% legal",
+    "Reemplaza a tu abogado",
+    "Liquidaciones exactas garantizadas",
+]
+
+FRASES_CORRECTAS = [
+    "Documentos de referencia listos para revisión",
+    "Basado en parámetros laborales configurables",
+    "No reemplaza asesoría legal, laboral ni contable",
+    "Valida siempre los casos especiales con tu contador o abogado",
+]

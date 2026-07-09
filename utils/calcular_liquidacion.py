@@ -27,7 +27,10 @@ TIPOS_CONTRATO_FIJO = {"fijo", "término fijo", "termino fijo", "a término fijo
 
 
 def _parsear_fecha(valor):
-    """Acepta datetime, date, Timestamp, string dd/mm/yyyy o yyyy-mm-dd."""
+    """
+    Acepta datetime, date, Timestamp, y strings en múltiples formatos.
+    Maneja timestamps de Supabase: '2026-05-01 00:00:00' o '2026-05-01T00:00:00'.
+    """
     if valor is None or (isinstance(valor, float) and pd.isna(valor)):
         return None
     try:
@@ -36,23 +39,28 @@ def _parsear_fecha(valor):
     except (TypeError, ValueError):
         pass
     if isinstance(valor, datetime):
-        return valor
+        return valor.replace(hour=0, minute=0, second=0, microsecond=0)
     if isinstance(valor, date):
         return datetime(valor.year, valor.month, valor.day)
     if isinstance(valor, pd.Timestamp):
-        return valor.to_pydatetime()
+        return valor.to_pydatetime().replace(hour=0, minute=0, second=0, microsecond=0)
 
     texto = str(valor).strip()
-    if not texto:
+    if not texto or texto.lower() in ("none","nan","nat","null",""):
         return None
-    for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%d/%m/%y"):
+
+    # Quitar la parte de hora si existe (Supabase: "2026-05-01 00:00:00")
+    if " " in texto:
+        texto = texto.split(" ")[0]
+    if "T" in texto:
+        texto = texto.split("T")[0]
+
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%d/%m/%y", "%Y/%m/%d"):
         try:
             return datetime.strptime(texto, fmt)
         except ValueError:
             continue
-    raise ValueError(
-        f"No se pudo interpretar la fecha '{valor}'. Usa formato dd/mm/aaaa."
-    )
+    return None
 
 
 def _dias_360(fecha_ingreso: datetime, fecha_corte: datetime) -> int:

@@ -19,6 +19,7 @@ from pathlib import Path
 from datetime import datetime
 from utils.numero_letras import numero_a_letras
 from utils.calcular_liquidacion import AUXILIO_TRANSPORTE_2026
+from utils.fecha_utils import fmt_fecha, fecha_hoy_larga
 
 # ── Paletas ──────────────────────────────────────────────────────────────────
 PALETAS = {
@@ -427,8 +428,7 @@ def generar_certificado(empleado: dict, datos_empresa: dict, ruta_salida: str,
                 membrete_path=membrete_path)
     el.append(Paragraph("CERTIFICACIÓN LABORAL", estilos["titulo"]))
 
-    fi = empleado.get("Fecha ingreso","")
-    if hasattr(fi,"strftime"): fi = fi.strftime("%d/%m/%Y")
+    fi = fmt_fecha(empleado.get("Fecha ingreso",""))
     tipo = empleado.get("Tipo contrato","")
     contrato_t = f", bajo contrato {tipo.lower()}," if tipo else ","
     ing_var = float(empleado.get("Ingreso promedio variable", 0) or 0)
@@ -592,8 +592,8 @@ def generar_liquidacion(resultado: dict, datos_empresa: dict, ruta_salida: str,
         ["Cédula No.",         resultado.get("Documento","")],
         ["Cuenta Bancaria",    resultado.get("Cuenta bancaria","")],
         ["Causa Liquidación",  _causa_retiro(resultado.get("Motivo retiro","renuncia"))],
-        ["Fecha de Retiro",    resultado.get("Fecha corte","")],
-        ["Fecha de Ingreso",   resultado.get("Fecha ingreso","")],
+        ["Fecha de Retiro",    fmt_fecha(resultado.get("Fecha corte",""))],
+        ["Fecha de Ingreso",   fmt_fecha(resultado.get("Fecha ingreso",""))],
         ["Total días a liquidar", str(dias_total)],
     ], colWidths=[5*cm, 11.5*cm])
     t_emp.setStyle(TableStyle([
@@ -705,3 +705,182 @@ def generar_liquidacion(resultado: dict, datos_empresa: dict, ruta_salida: str,
 
 def nombre_disenio(d: int) -> str:
     return PALETAS.get(d, PALETAS[1])["nombre"]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CERTIFICADO LABORAL SIN SALARIO
+# ══════════════════════════════════════════════════════════════════════════════
+def generar_certificado_sin_salario(empleado: dict, datos_empresa: dict,
+                                     ruta_salida: str, disenio: int = 1,
+                                     usar_marca_agua: bool = False,
+                                     membrete_path: str = None,
+                                     usar_logo_enc: bool = True):
+    """
+    Certificado laboral que NO incluye el valor del salario.
+    Útil cuando el empleado solicita certificado solo para verificar cargo y tiempo.
+    """
+    from utils.fecha_utils import fmt_fecha, fecha_hoy_larga
+    paleta  = PALETAS.get(disenio, PALETAS[1])
+    estilos = _estilos_para(paleta)
+    logo    = datos_empresa.get("logo_path") if usar_logo_enc else None
+    tiene_logo     = bool(logo and Path(logo).exists())
+    tiene_membrete = bool(membrete_path and Path(membrete_path).exists())
+    margen_sup = MARGEN_SUP_MEMBRETE if (tiene_logo or tiene_membrete) else MARGEN_SUP_NORMAL
+
+    doc = SimpleDocTemplate(ruta_salida, pagesize=letter,
+        topMargin=margen_sup, bottomMargin=MARGEN_INF,
+        leftMargin=MARGEN_IZQ, rightMargin=MARGEN_DER)
+    el = []
+    _encabezado(el, datos_empresa, estilos, paleta, disenio,
+                membrete_path=membrete_path)
+    el.append(Paragraph("CERTIFICACIÓN LABORAL", estilos["titulo"]))
+
+    fi   = fmt_fecha(empleado.get("Fecha ingreso",""))
+    tipo = empleado.get("Tipo contrato","")
+    contrato_t = f", bajo contrato {tipo.lower()}," if tipo else ","
+    fecha_expedicion = fecha_hoy_larga()
+
+    el.append(Paragraph(
+        f"La empresa <b>{datos_empresa.get('nombre','')}</b>, identificada con NIT "
+        f"<b>{datos_empresa.get('nit','')}</b>, certifica que "
+        f"<b>{empleado.get('Nombre','')}</b>, identificado(a) con cédula No. "
+        f"<b>{empleado.get('Documento','')}</b>, labora en la compañía desde el "
+        f"<b>{fi}</b>{contrato_t} desempeñando el cargo de "
+        f"<b>{empleado.get('Cargo','')}</b>.",
+        estilos["cuerpo"]))
+    el.append(Paragraph(
+        f"Se expide la presente certificación a solicitud del interesado(a), "
+        f"el día <b>{fecha_expedicion}</b>, para los fines que estime pertinentes.",
+        estilos["cuerpo"]))
+
+    el.append(Spacer(1, 33))
+    el.append(Paragraph("Cordialmente,", estilos["cuerpo"]))
+    el.append(Spacer(1, 49))
+    t_firma = Table([["", ""]], colWidths=[8*cm, 9*cm])
+    t_firma.setStyle(TableStyle([
+        ("LINEABOVE", (0,0), (0,0), 0.8, paleta["primario"]),
+        ("TOPPADDING",(0,0),(-1,-1),0),("BOTTOMPADDING",(0,0),(-1,-1),4),
+        ("LEFTPADDING",(0,0),(-1,-1),0),("RIGHTPADDING",(0,0),(-1,-1),0),
+    ]))
+    el.append(t_firma)
+    el.append(Paragraph(datos_empresa.get("representante",""), estilos["firma_nombre"]))
+    el.append(Paragraph(
+        f"{datos_empresa.get('_cargo_firmante','Representante Legal')} — "
+        f"{datos_empresa.get('nombre','')}",
+        estilos["firma_cargo"]))
+    el.append(Paragraph(
+        "Documento generado automáticamente. Verifique los datos antes del uso oficial.",
+        estilos["nota"]))
+
+    _fn = lambda c,d: _pie(c, d, paleta, logo, usar_marca_agua)
+    doc.build(el, onFirstPage=_fn, onLaterPages=_fn)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PAZ Y SALVO LABORAL
+# ══════════════════════════════════════════════════════════════════════════════
+def generar_paz_salvo(empleado: dict, datos_empresa: dict,
+                       ruta_salida: str, disenio: int = 1,
+                       usar_marca_agua: bool = False,
+                       membrete_path: str = None,
+                       usar_logo_enc: bool = True,
+                       conceptos_pendientes: str = "",
+                       observaciones: str = ""):
+    """
+    Paz y salvo laboral — certifica que el empleado no tiene pendientes con la empresa.
+    """
+    from utils.fecha_utils import fmt_fecha, fecha_hoy_larga
+    from utils.numero_letras import numero_a_letras
+    paleta  = PALETAS.get(disenio, PALETAS[1])
+    estilos = _estilos_para(paleta)
+    logo    = datos_empresa.get("logo_path") if usar_logo_enc else None
+    tiene_logo     = bool(logo and Path(logo).exists())
+    tiene_membrete = bool(membrete_path and Path(membrete_path).exists())
+    margen_sup = MARGEN_SUP_MEMBRETE if (tiene_logo or tiene_membrete) else MARGEN_SUP_NORMAL
+
+    doc = SimpleDocTemplate(ruta_salida, pagesize=letter,
+        topMargin=margen_sup, bottomMargin=MARGEN_INF,
+        leftMargin=MARGEN_IZQ, rightMargin=MARGEN_DER)
+    el = []
+    _encabezado(el, datos_empresa, estilos, paleta, disenio,
+                membrete_path=membrete_path)
+    el.append(Paragraph("PAZ Y SALVO LABORAL", estilos["titulo"]))
+
+    fi   = fmt_fecha(empleado.get("Fecha ingreso",""))
+    fr   = fmt_fecha(empleado.get("Fecha retiro","") or empleado.get("fecha_retiro",""))
+    fecha_expedicion = fecha_hoy_larga()
+    nombre  = empleado.get("Nombre","")
+    doc_emp = empleado.get("Documento","")
+    cargo   = empleado.get("Cargo","")
+    empresa = datos_empresa.get("nombre","")
+    nit     = datos_empresa.get("nit","")
+
+    # Texto principal
+    pendientes_txt = (
+        f"Al momento de su retiro, el trabajador presenta los siguientes conceptos "
+        f"pendientes: {conceptos_pendientes}."
+        if conceptos_pendientes else
+        "Al momento de su retiro, el trabajador no presenta pendientes de ningún "
+        "tipo con la empresa."
+    )
+
+    el.append(Paragraph(
+        f"La empresa <b>{empresa}</b>, identificada con NIT <b>{nit}</b>, hace "
+        f"constar que <b>{nombre}</b>, identificado(a) con cédula No. "
+        f"<b>{doc_emp}</b>, quien se desempeñó como <b>{cargo}</b> desde el "
+        f"<b>{fi}</b>{f' hasta el <b>{fr}</b>' if fr else ''}, "
+        f"se encuentra <b>A PAZ Y SALVO</b> con la empresa por los siguientes conceptos:",
+        estilos["cuerpo"]))
+
+    # Tabla de conceptos
+    conceptos = [
+        ["Concepto", "Estado"],
+        ["Devolución de elementos, equipos y dotación", "✓ Sin pendientes"],
+        ["Entrega de documentos y archivos a cargo", "✓ Sin pendientes"],
+        ["Cartera, anticipos o préstamos de nómina", "✓ Sin pendientes"],
+        ["Obligaciones laborales y contractuales", "✓ Sin pendientes"],
+        ["Otros conceptos", "✓ Sin pendientes"],
+    ]
+    t_conceptos = Table(conceptos, colWidths=[10*cm, 6.5*cm])
+    t_conceptos.setStyle(TableStyle([
+        ("BACKGROUND",    (0,0), (-1,0),  paleta["primario"]),
+        ("TEXTCOLOR",     (0,0), (-1,0),  colors.white),
+        ("FONTNAME",      (0,0), (-1,0),  "Helvetica-Bold"),
+        ("BACKGROUND",    (0,1), (-1,-1), paleta["acento"]),
+        ("FONTSIZE",      (0,0), (-1,-1), 9),
+        ("GRID",          (0,0), (-1,-1), 0.5, paleta["borde"]),
+        ("TOPPADDING",    (0,0), (-1,-1), 6),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 6),
+        ("LEFTPADDING",   (0,0), (-1,-1), 10),
+        ("ALIGN",         (1,0), (1,-1),  "CENTER"),
+    ]))
+    el.append(Spacer(1, 8))
+    el.append(t_conceptos)
+
+    if observaciones:
+        el.append(Spacer(1, 8))
+        el.append(Paragraph(f"<b>Observaciones:</b> {observaciones}", estilos["cuerpo"]))
+
+    el.append(Spacer(1, 16))
+    el.append(Paragraph(
+        f"Se expide el presente paz y salvo el día <b>{fecha_expedicion}</b>, "
+        f"para los fines que estime pertinentes.",
+        estilos["cuerpo"]))
+
+    # Firmas dobles — empresa y empleado
+    _firmas_dobles(el,
+        representante=datos_empresa.get("representante",""),
+        empresa=empresa,
+        nombre_empleado=nombre,
+        cedula=doc_emp,
+        paleta=paleta,
+        estilos=estilos,
+        cargo_firmante=datos_empresa.get("_cargo_firmante","Representante Legal"))
+
+    el.append(Paragraph(
+        "<b>Aviso:</b> Este documento no libera al trabajador de obligaciones "
+        "no declaradas al momento del retiro. Conserve copia de este documento.",
+        estilos["nota"]))
+
+    _fn = lambda c,d: _pie(c, d, paleta, logo, usar_marca_agua)
+    doc.build(el, onFirstPage=_fn, onLaterPages=_fn)
