@@ -1,7 +1,7 @@
 """
 Procesamiento de membrete desde Word (.docx).
 Extrae el encabezado/membrete del Word del usuario y lo convierte
-en imagen PNG para usarlo en los PDFs generados por RH Fácil.
+en imagen PNG para usarlo en los PDFs generados por GestorRH Colombia.
 """
 
 import zipfile

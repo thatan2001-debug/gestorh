@@ -1,5 +1,5 @@
 -- ================================================================
--- RH Fácil — Schema Supabase v2 (COMPLETO con RLS y historial)
+-- GestorRH Colombia — Schema Supabase v2 (COMPLETO con RLS y historial)
 -- 
 -- INSTRUCCIONES:
 -- 1. Ve a supabase.com → tu proyecto → SQL Editor → New Query
@@ -256,12 +256,12 @@ create policy "plantillas_service" on plantillas_personalizadas
 -- ================================================================
 insert into usuarios (email, nombre, password_hash, plan, activo, es_admin, es_demo)
 values
-  ('demo@rhfacil.co',
+  ('demo@gestorrh.co',
    'Usuario Demo',
-   encode(digest('RHFacil2026', 'sha256'), 'hex'),
+   encode(digest('GestorRHCol2026', 'sha256'), 'hex'),
    'pro', true, false, true),
-  ('admin@rhfacil.co',
-   'Administrador RH Fácil',
+  ('admin@gestorrh.co',
+   'Administrador GestorRH Colombia',
    encode(digest('Admin2026*', 'sha256'), 'hex'),
    'empresarial', true, true, false)
 on conflict (email) do nothing;

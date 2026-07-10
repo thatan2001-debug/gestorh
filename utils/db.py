@@ -75,12 +75,12 @@ def supabase_ok() -> bool:
 # ── Fallback JSON ─────────────────────────────────────────────────────────────
 _JP = Path("salidas/.usuarios.json")
 _DEMO = {
-    "demo@rhfacil.co": {
+    "demo@gestorrh.co": {
         "nombre":"Usuario Demo","plan":"pro","activo":True,
         "activado_admin":True,"es_demo":True,"es_admin":False,"docs_usados":0,
-        "password_hash":hashlib.sha256(b"RHFacil2026").hexdigest(),"empresa_config":None,
+        "password_hash":hashlib.sha256(b"GestorRHCol2026").hexdigest(),"empresa_config":None,
     },
-    "admin@rhfacil.co": {
+    "admin@gestorrh.co": {
         "nombre":"Administrador","plan":"empresarial","activo":True,
         "activado_admin":True,"es_demo":False,"es_admin":True,"docs_usados":0,
         "password_hash":hashlib.sha256(b"Admin2026*").hexdigest(),"empresa_config":None,

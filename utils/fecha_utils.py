@@ -1,5 +1,5 @@
 """
-Utilidades de fechas para RH Fácil.
+Utilidades de fechas para GestorRH Colombia.
 Normaliza cualquier formato de fecha a dd/mm/aaaa legible.
 Supabase devuelve timestamps como "2026-05-01 00:00:00" o "2026-05-01T00:00:00".
 Excel devuelve objetos datetime o strings "01/05/2026".

@@ -1,5 +1,5 @@
 """
-Catálogo de documentos disponibles en RH Fácil.
+Catálogo de documentos disponibles en GestorRH Colombia.
 Define qué documentos existen, qué campos requieren, qué plan los habilita
 y qué plantilla PDF los genera.
 
@@ -356,6 +356,19 @@ CATALOGO = {
         "campos_opt":   ["nuevo_salario", "nuevas_funciones", "observaciones"],
         "genera_pdf":   None,
         "disclaimer":   "Art. 23 CST: El cargo es elemento esencial del contrato.",
+    },
+
+    "otrosi": {
+        "nombre":       "Otrosí al Contrato",
+        "categoria":    "Novedades",
+        "icono":        "✍️",
+        "plan_minimo":  "pro",
+        "implementado": True,
+        "descripcion":  "Modifica el contrato original por cambio de cargo, salario o lugar de trabajo. Se genera desde la pantalla de Empleados.",
+        "campos_req":   ["tipo_cambio", "fecha_vigencia"],
+        "campos_opt":   ["motivo"],
+        "genera_pdf":   "generar_otrosi",
+        "disclaimer":   "Art. 43 CST — Modificación por mutuo acuerdo. Actualiza los datos del empleado en la base de datos.",
     },
 
     # ══════════════════════════════════════════════════════════════

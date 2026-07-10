@@ -1,5 +1,5 @@
 """
-Historial de documentos generados — RH Fácil.
+Historial de documentos generados — GestorRH Colombia.
 Registra cada documento en Supabase con fallback JSON local.
 """
 
@@ -31,6 +31,7 @@ NOMBRES_DOCUMENTO = {
     "entrega_dotacion":            "Acta de Entrega de Dotación",
     "cambio_salario":              "Comunicación de Cambio de Salario",
     "cambio_cargo":                "Comunicación de Cambio de Cargo",
+    "otrosi":                      "Otrosí al Contrato",
     "llamado_atencion":            "Llamado de Atención",
     "citacion_descargos":          "Citación a Descargos",
     "acta_descargos":              "Acta de Descargos",

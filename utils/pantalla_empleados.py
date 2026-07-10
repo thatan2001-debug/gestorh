@@ -63,7 +63,7 @@ def _tab_base(email: str):
         if PLANTILLA_EXCEL.exists():
             with open(PLANTILLA_EXCEL, "rb") as f:
                 st.download_button("⬇️ Descargar plantilla",f,
-                    file_name="Base_Empleados_RHFacil.xlsx",
+                    file_name="Base_Empleados_GestorRHCol.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         archivo = st.file_uploader("Sube tu Excel", type=["xlsx"], key="imp_excel")
         if archivo:
@@ -105,7 +105,14 @@ def _tab_base(email: str):
     st.caption(f"Mostrando {len(empleados)} empleado(s)")
 
     # Tabla de empleados
-    for emp in empleados:
+    # Aviso visual para que el usuario sepa que hay botones dentro
+    if empleados:
+        st.info(
+            "💡 **Haz clic en cualquier empleado** para ver las acciones disponibles: "
+            "Editar · 📄 Docs · 📝 Contrato · ✍️ Otrosí · 🔴 Retirar"
+        )
+
+    for i, emp in enumerate(empleados):
         activo = emp.get("activo", True)
         ing_var = float(emp.get("ingreso_promedio_variable", 0) or 0)
         badge_var = " 📊" if ing_var > 0 else ""
@@ -115,7 +122,8 @@ def _tab_base(email: str):
         with st.expander(
             f"{'✅' if activo else '⭕'} **{emp.get('nombre','')}**"
             f"{badge_ret}{badge_var} · {emp.get('documento','')} · "
-            f"{emp.get('cargo','')} · {salario_fmt}"
+            f"{emp.get('cargo','')} · {salario_fmt}",
+            expanded=(i == 0),   # ← Primer empleado abierto por defecto
         ):
             c1, c2, c3 = st.columns([2, 2, 1])
             with c1:
@@ -142,9 +150,19 @@ def _tab_base(email: str):
                     st.rerun()
                 # Agregar al carrito de generación
                 if activo:
-                    if st.button("📄 Generar doc", key=f"gen_{doc}",
+                    if st.button("📄 Docs", key=f"gen_{doc}",
                                  use_container_width=True, type="primary"):
                         _agregar_al_carrito(emp)
+                        st.rerun()
+                    # Generar contrato directo
+                    if st.button("📝 Contrato", key=f"contrato_{doc}",
+                                 use_container_width=True):
+                        st.session_state["emp_contrato"] = emp
+                        st.rerun()
+                    # Generar otrosí
+                    if st.button("✍️ Otrosí", key=f"otrosi_{doc}",
+                                 use_container_width=True):
+                        st.session_state["emp_otrosi"] = emp
                         st.rerun()
                 # Retirar / Eliminar
                 if activo:
@@ -157,6 +175,13 @@ def _tab_base(email: str):
                                  use_container_width=True):
                         empleado_eliminar(email, doc)
                         st.rerun()
+
+    # ── Modales de Contrato y Otrosí ─────────────────────────────────────
+    if st.session_state.get("emp_contrato"):
+        _modal_contrato(email, st.session_state["emp_contrato"])
+
+    if st.session_state.get("emp_otrosi"):
+        _modal_otrosi(email, st.session_state["emp_otrosi"])
 
     # Carrito flotante
     _mostrar_carrito_resumen()
@@ -627,7 +652,7 @@ def _ejecutar_generacion(email: str, enviar_correo: bool):
         st.download_button(
             "⬇️ Descargar todos los documentos (ZIP)",
             buf, mime="application/zip", type="primary",
-            file_name=f"RHFacil_{empresa_nombre}_{dt.today().strftime('%Y%m%d')}.zip",
+            file_name=f"GestorRHCol_{empresa_nombre}_{dt.today().strftime('%Y%m%d')}.zip",
         )
         # Limpiar carrito
         if st.button("🗑️ Vaciar carrito y generar nuevos"):
@@ -639,3 +664,302 @@ def date_fmt(val: str) -> str:
     """Formatea una fecha para mostrar."""
     if not val or val == "None" or val == "nan": return ""
     return str(val)[:10]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MODAL: GENERAR CONTRATO DIRECTO DESDE EMPLEADOS
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _modal_contrato(email: str, emp: dict):
+    """Formulario compacto para generar un contrato directo desde empleados."""
+    st.divider()
+    st.markdown(f"### 📝 Generar contrato para {emp.get('nombre','')}")
+    if st.button("← Cancelar", key="cancel_contrato"):
+        del st.session_state["emp_contrato"]
+        st.rerun()
+
+    TIPOS = {
+        "contrato_indefinido": "Contrato a Término Indefinido (Art. 47 CST)",
+        "contrato_fijo":       "Contrato a Término Fijo (Art. 46 CST · Ley 2466/2025)",
+        "contrato_obra":       "Contrato por Obra o Labor (Art. 46 CST)",
+        "contrato_prestacion": "Contrato de Prestación de Servicios (civil, no laboral)",
+    }
+
+    with st.form("form_contrato_directo"):
+        tipo = st.selectbox("Tipo de contrato *", list(TIPOS.keys()),
+            format_func=lambda x: TIPOS[x])
+
+        c1, c2 = st.columns(2)
+        with c1:
+            fi = st.date_input("Fecha de inicio *", value=date.today())
+            lugar = st.text_input("Lugar de trabajo",
+                value=st.session_state.get("datos_empresa",{}).get("ciudad","Colombia"))
+        with c2:
+            ff = None
+            if tipo in ("contrato_fijo","contrato_prestacion"):
+                ff = st.date_input("Fecha de terminación *", value=date.today(),
+                    help="Máximo 4 años según Ley 2466/2025" if tipo == "contrato_fijo" else None)
+            jornada = st.selectbox("Jornada", ["Diurna","Nocturna","Mixta"])
+
+        desc_obra = objeto = honorarios = forma_pago = None
+        if tipo == "contrato_obra":
+            desc_obra = st.text_area("Descripción específica de la obra *",
+                placeholder="Ej: Construcción del muro perimetral del proyecto ABC...")
+        elif tipo == "contrato_prestacion":
+            objeto = st.text_area("Objeto del contrato *",
+                placeholder="Ej: Servicios profesionales de asesoría contable mensual...")
+            cc1, cc2 = st.columns(2)
+            with cc1:
+                honorarios = st.number_input("Honorarios mensuales ($)",
+                    min_value=0.0, step=100000.0)
+            with cc2:
+                forma_pago = st.selectbox("Forma de pago", [
+                    "Mensual, contra entrega de factura o cuenta de cobro",
+                    "Quincenal, contra entrega de factura",
+                    "Único pago al finalizar el servicio",
+                ])
+
+        periodo_prueba = True
+        if tipo in ("contrato_indefinido","contrato_fijo"):
+            periodo_prueba = st.checkbox("Incluir período de prueba de 2 meses", value=True)
+
+        funciones = st.text_area("Funciones específicas (opcional)")
+
+        generar = st.form_submit_button("🚀 Generar contrato", type="primary")
+
+        if generar:
+            # Validaciones
+            errores = []
+            if tipo == "contrato_obra" and not desc_obra:
+                errores.append("La descripción de la obra es obligatoria (Art. 46 CST)")
+            if tipo == "contrato_prestacion" and not objeto:
+                errores.append("El objeto del contrato es obligatorio")
+
+            if errores:
+                for e in errores: st.error(e)
+            else:
+                _ejecutar_contrato_directo(email, emp, tipo, {
+                    "fecha_inicio_contrato": fi,
+                    "fecha_fin_contrato":    ff,
+                    "lugar_trabajo":         lugar,
+                    "jornada":               jornada,
+                    "periodo_prueba":        periodo_prueba,
+                    "descripcion_obra":      desc_obra,
+                    "objeto_contrato":       objeto,
+                    "honorarios":            honorarios or 0,
+                    "forma_pago":            forma_pago or "",
+                    "funciones":             funciones,
+                })
+
+
+def _ejecutar_contrato_directo(email: str, emp: dict, tipo: str, cfg: dict):
+    """Ejecuta la generación del contrato y ofrece descarga."""
+    from utils.contratos import (
+        generar_contrato_indefinido, generar_contrato_fijo,
+        generar_contrato_obra, generar_contrato_prestacion,
+    )
+    from utils.historial import registrar as registrar_hist
+
+    datos_empresa = st.session_state.get("datos_empresa", {})
+    rep = datos_empresa.get("representante","")
+    datos_c = {**datos_empresa,
+        "representante":   rep,
+        "_cargo_firmante": "Representante Legal",
+    }
+
+    emp_doc = {
+        "Nombre":        emp.get("nombre",""),
+        "Documento":     emp.get("documento",""),
+        "Cargo":         emp.get("cargo",""),
+        "Salario":       float(emp.get("salario", 0) or 0),
+        "Fecha ingreso": emp.get("fecha_ingreso",""),
+        "Tipo contrato": emp.get("tipo_contrato","Indefinido"),
+    }
+
+    SALIDAS = Path("salidas"); SALIDAS.mkdir(exist_ok=True)
+    nb = emp.get("nombre","empleado").strip().replace(" ","_")
+    disenio  = st.session_state.get("disenio_seleccionado", 1)
+    usar_mda = st.session_state.get("usar_marca_agua", False)
+    usar_logo= st.session_state.get("usar_logo_enc", True)
+    membrete = st.session_state.get("membrete_path")
+
+    try:
+        if tipo == "contrato_indefinido":
+            ruta = str(SALIDAS / f"ContratoIndefinido_{nb}.pdf")
+            generar_contrato_indefinido(emp_doc, datos_c, ruta, cfg,
+                disenio, usar_mda, membrete, usar_logo)
+        elif tipo == "contrato_fijo":
+            ruta = str(SALIDAS / f"ContratoFijo_{nb}.pdf")
+            generar_contrato_fijo(emp_doc, datos_c, ruta, cfg,
+                disenio, usar_mda, membrete, usar_logo)
+        elif tipo == "contrato_obra":
+            ruta = str(SALIDAS / f"ContratoObra_{nb}.pdf")
+            generar_contrato_obra(emp_doc, datos_c, ruta, cfg,
+                disenio, usar_mda, membrete, usar_logo)
+        else:  # contrato_prestacion
+            ruta = str(SALIDAS / f"ContratoPrestacion_{nb}.pdf")
+            generar_contrato_prestacion(emp_doc, datos_c, ruta, cfg,
+                disenio, usar_mda, membrete, usar_logo)
+
+        # Registrar historial
+        registrar_hist(email, email, datos_empresa.get("nombre",""),
+            tipo, emp.get("documento",""), emp.get("nombre",""),
+            Path(ruta).name)
+
+        st.success(f"✅ Contrato generado correctamente.")
+        with open(ruta, "rb") as f:
+            st.download_button("⬇️ Descargar contrato PDF",
+                f, file_name=Path(ruta).name, mime="application/pdf",
+                type="primary")
+        if st.button("Cerrar y volver"):
+            del st.session_state["emp_contrato"]
+            st.rerun()
+    except Exception as e:
+        st.error(f"Error generando el contrato: {e}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MODAL: GENERAR OTROSÍ (Cambio cargo, salario, lugar)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _modal_otrosi(email: str, emp: dict):
+    """Formulario para generar un otrosí — modifica el contrato existente."""
+    st.divider()
+    st.markdown(f"### ✍️ Otrosí para {emp.get('nombre','')}")
+    st.caption("Modifica el contrato original por cambio de cargo, salario y/o lugar de trabajo.")
+
+    if st.button("← Cancelar", key="cancel_otrosi"):
+        del st.session_state["emp_otrosi"]
+        st.rerun()
+
+    with st.form("form_otrosi"):
+        st.markdown("**¿Qué se modifica?** Puedes seleccionar uno o varios cambios:")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            cambio_cargo = st.checkbox("Cambio de cargo")
+        with c2:
+            cambio_salario = st.checkbox("Cambio de salario")
+        with c3:
+            cambio_lugar = st.checkbox("Cambio de lugar de trabajo")
+
+        fecha_vig = st.date_input("Fecha de vigencia del cambio *", value=date.today(),
+            help="Fecha desde la cual aplica el cambio")
+
+        st.divider()
+
+        nuevo_cargo = nuevas_funciones = ""
+        if cambio_cargo:
+            st.markdown("**📋 Cambio de cargo:**")
+            st.info(f"Cargo actual: **{emp.get('cargo','')}**")
+            nuevo_cargo = st.text_input("Nuevo cargo *",
+                placeholder="Ej: Coordinador de Operaciones")
+            nuevas_funciones = st.text_area("Funciones específicas del nuevo cargo (opcional)")
+
+        nuevo_salario = 0.0
+        if cambio_salario:
+            st.markdown("**💰 Cambio de salario:**")
+            sal_actual = float(emp.get("salario", 0) or 0)
+            st.info(f"Salario actual: **${sal_actual:,.0f}**".replace(",","."))
+            nuevo_salario = st.number_input("Nuevo salario mensual ($) *",
+                min_value=0.0, step=50000.0, value=sal_actual)
+
+        nuevo_lugar = ""
+        if cambio_lugar:
+            st.markdown("**📍 Cambio de lugar de trabajo:**")
+            lugar_actual = st.session_state.get("datos_empresa",{}).get("ciudad","Colombia")
+            st.info(f"Lugar actual: **{lugar_actual}**")
+            nuevo_lugar = st.text_input("Nuevo lugar de trabajo *",
+                placeholder="Ej: Bogotá D.C. — Cra 45 #50-30")
+
+        motivo = st.text_area("Motivo del cambio (opcional)",
+            placeholder="Ej: Promoción por desempeño destacado / reestructuración organizacional...")
+
+        generar = st.form_submit_button("🚀 Generar otrosí", type="primary")
+
+        if generar:
+            # Validaciones
+            tipos_cambio = []
+            errores = []
+            if cambio_cargo:
+                if not nuevo_cargo: errores.append("Debes indicar el nuevo cargo")
+                else: tipos_cambio.append("cargo")
+            if cambio_salario:
+                if nuevo_salario <= 0: errores.append("El nuevo salario debe ser mayor a 0")
+                else: tipos_cambio.append("salario")
+            if cambio_lugar:
+                if not nuevo_lugar: errores.append("Debes indicar el nuevo lugar")
+                else: tipos_cambio.append("lugar")
+            if not tipos_cambio:
+                errores.append("Selecciona al menos un tipo de cambio")
+
+            if errores:
+                for e in errores: st.error(e)
+            else:
+                _ejecutar_otrosi(email, emp, {
+                    "tipo_cambio":       tipos_cambio,
+                    "fecha_vigencia":    fecha_vig,
+                    "nuevo_cargo":       nuevo_cargo,
+                    "nuevas_funciones":  nuevas_funciones,
+                    "nuevo_salario":     nuevo_salario,
+                    "nuevo_lugar":       nuevo_lugar,
+                    "lugar_actual":      st.session_state.get("datos_empresa",{}).get("ciudad","Colombia"),
+                    "motivo":            motivo,
+                })
+
+
+def _ejecutar_otrosi(email: str, emp: dict, cfg: dict):
+    """Ejecuta la generación del otrosí y actualiza la BD si aplica."""
+    from utils.contratos import generar_otrosi
+    from utils.historial import registrar as registrar_hist
+    from utils.empleados_db import empleado_guardar
+
+    datos_empresa = st.session_state.get("datos_empresa", {})
+    rep = datos_empresa.get("representante","")
+    datos_c = {**datos_empresa,
+        "representante":   rep,
+        "_cargo_firmante": "Representante Legal",
+    }
+    emp_doc = {
+        "Nombre":        emp.get("nombre",""),
+        "Documento":     emp.get("documento",""),
+        "Cargo":         emp.get("cargo",""),
+        "Salario":       float(emp.get("salario",0) or 0),
+        "Fecha ingreso": emp.get("fecha_ingreso",""),
+    }
+
+    SALIDAS = Path("salidas"); SALIDAS.mkdir(exist_ok=True)
+    nb = emp.get("nombre","empleado").strip().replace(" ","_")
+    disenio  = st.session_state.get("disenio_seleccionado", 1)
+    usar_mda = st.session_state.get("usar_marca_agua", False)
+    usar_logo= st.session_state.get("usar_logo_enc", True)
+    membrete = st.session_state.get("membrete_path")
+
+    ruta = str(SALIDAS / f"Otrosi_{nb}_{date.today().strftime('%Y%m%d')}.pdf")
+
+    try:
+        generar_otrosi(emp_doc, datos_c, ruta, cfg,
+            disenio, usar_mda, membrete, usar_logo)
+
+        # Actualizar datos del empleado en la BD según los cambios
+        datos_actualizados = {**emp}
+        if "cargo" in cfg["tipo_cambio"]:
+            datos_actualizados["cargo"] = cfg["nuevo_cargo"]
+        if "salario" in cfg["tipo_cambio"]:
+            datos_actualizados["salario"] = cfg["nuevo_salario"]
+        empleado_guardar(email, datos_actualizados)
+
+        registrar_hist(email, email, datos_empresa.get("nombre",""),
+            "otrosi", emp.get("documento",""), emp.get("nombre",""),
+            Path(ruta).name,
+            observaciones=f"Cambios: {', '.join(cfg['tipo_cambio'])}")
+
+        st.success("✅ Otrosí generado y datos del empleado actualizados.")
+        with open(ruta, "rb") as f:
+            st.download_button("⬇️ Descargar otrosí PDF",
+                f, file_name=Path(ruta).name, mime="application/pdf",
+                type="primary")
+        if st.button("Cerrar y volver"):
+            del st.session_state["emp_otrosi"]
+            st.rerun()
+    except Exception as e:
+        st.error(f"Error generando el otrosí: {e}")

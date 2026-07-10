@@ -1,5 +1,5 @@
 """
-Onboarding de empresa para RH Fácil.
+Onboarding de empresa para GestorRH Colombia.
 Cuando una PYME se registra, completa su perfil completo en un flujo
 de 3 pasos antes de poder usar la app.
 Todos los datos se persisten en Supabase (o JSON local como fallback).
@@ -282,7 +282,7 @@ def mostrar_onboarding(email: str, nombre_usuario: str) -> bool:
                     st.session_state.usar_marca_agua   = usar_mda
                     st.session_state.ob_paso = 1
                     del st.session_state["ob_datos"]
-                    st.success("✅ Empresa configurada. ¡Bienvenido a RH Fácil!")
+                    st.success("✅ Empresa configurada. ¡Bienvenido a GestorRH Colombia!")
                     st.rerun()
                 else:
                     st.error("Error guardando los datos. Intenta de nuevo.")

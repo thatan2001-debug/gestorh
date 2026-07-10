@@ -1,5 +1,5 @@
 """
-Capa de base de datos para RH Fácil.
+Capa de base de datos para GestorRH Colombia.
 Usa Supabase (PostgreSQL) si las variables de entorno están configuradas.
 Fallback transparente a JSON local si no lo están (desarrollo/demo).
 """
@@ -36,13 +36,13 @@ def supabase_activo() -> bool:
 _JSON_PATH = Path("salidas/.usuarios.json")
 
 USUARIOS_INICIALES = {
-    "demo@rhfacil.co": {
-        "nombre": "Usuario Demo", "password_hash": _hash("RHFacil2026"),
+    "demo@gestorrh.co": {
+        "nombre": "Usuario Demo", "password_hash": _hash("GestorRHCol2026"),
         "plan": "pro", "documentos_usados": 0, "activo": True,
         "es_admin": False, "es_demo": True, "empresa": "",
         "empresa_config": {}
     },
-    "admin@rhfacil.co": {
+    "admin@gestorrh.co": {
         "nombre": "Administrador", "password_hash": _hash("Admin2026*"),
         "plan": "empresarial", "documentos_usados": 0, "activo": True,
         "es_admin": True, "es_demo": False, "empresa": "",

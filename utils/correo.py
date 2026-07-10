@@ -7,7 +7,7 @@ Configuración en Render → Environment Variables:
   SMTP_PORT     587
   SMTP_USER     tucorreo@gmail.com
   SMTP_PASS     contraseña_de_aplicacion_gmail
-  SMTP_FROM     RH Fácil <tucorreo@gmail.com>
+  SMTP_FROM     GestorRH Colombia <tucorreo@gmail.com>
 """
 
 import smtplib
@@ -24,7 +24,7 @@ def _config_smtp() -> dict:
         "port": int(os.getenv("SMTP_PORT", 587)),
         "user": os.getenv("SMTP_USER", ""),
         "password": os.getenv("SMTP_PASS", ""),
-        "from": os.getenv("SMTP_FROM", "RH Fácil <noreply@rhfacil.co>"),
+        "from": os.getenv("SMTP_FROM", "GestorRH Colombia <noreply@gestorrh.co>"),
     }
 
 
@@ -71,7 +71,7 @@ Cordialmente,
 {empresa_nombre}
 
 ---
-Documento generado automáticamente por RH Fácil.
+Documento generado automáticamente por GestorRH Colombia.
 Este correo fue enviado desde {remitente}.
 """
     msg.attach(MIMEText(cuerpo, "plain", "utf-8"))
@@ -107,13 +107,13 @@ def instrucciones_gmail() -> str:
 **Cómo configurar Gmail para envío automático:**
 
 1. Entra a tu cuenta Google → Seguridad → Verificación en 2 pasos (actívala si no está)
-2. En Seguridad → Contraseñas de aplicaciones → crea una para "RH Fácil"
+2. En Seguridad → Contraseñas de aplicaciones → crea una para "GestorRH Colombia"
 3. Copia la contraseña de 16 caracteres que genera Google
 4. En Render → tu servicio → Environment → agrega:
    - `SMTP_HOST` = `smtp.gmail.com`
    - `SMTP_PORT` = `587`
    - `SMTP_USER` = `tucorreo@gmail.com`
    - `SMTP_PASS` = `contraseña de 16 caracteres`
-   - `SMTP_FROM` = `RH Fácil <tucorreo@gmail.com>`
+   - `SMTP_FROM` = `GestorRH Colombia <tucorreo@gmail.com>`
 5. Guarda y redespliega. Listo.
 """

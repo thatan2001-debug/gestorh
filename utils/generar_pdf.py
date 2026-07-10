@@ -120,7 +120,7 @@ def _pie_pagina(canvas, doc):
     canvas.setFillColor(GRIS)
     fecha_gen = datetime.today().strftime("%d/%m/%Y %H:%M")
     canvas.drawString(2 * cm, 1.2 * cm,
-                      f"Generado automáticamente el {fecha_gen} — RH Fácil")
+                      f"Generado automáticamente el {fecha_gen} — GestorRH Colombia")
     canvas.drawRightString(letter[0] - 2 * cm, 1.2 * cm,
                            "Estimación de referencia. Validar con contador o abogado laboral.")
     canvas.restoreState()

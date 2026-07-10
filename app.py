@@ -1,5 +1,5 @@
 """
-RH Fácil v16 — App principal con Supabase, onboarding y dashboard
+GestorRH Colombia v16 — App principal con Supabase, onboarding y dashboard
 """
 import streamlit as st
 import pandas as pd
@@ -24,13 +24,13 @@ from utils.preview_disenios import generar_previews, limpiar_previews
 from utils.correo import enviar_documentos, smtp_configurado, instrucciones_gmail
 from utils.estilos import CSS
 
-st.set_page_config(page_title="RH Fácil", page_icon="📄", layout="wide")
+st.set_page_config(page_title="GestorRH Colombia", page_icon="📄", layout="wide")
 st.markdown(CSS, unsafe_allow_html=True)
 
 CARPETA_SALIDAS = Path("salidas"); CARPETA_SALIDAS.mkdir(exist_ok=True)
 CARPETA_ASSETS  = Path("assets");  CARPETA_ASSETS.mkdir(exist_ok=True)
 PLANTILLA_EXCEL = Path("plantillas/Base_Empleados.xlsx")
-ADMIN_EMAIL     = "admin@rhfacil.co"
+ADMIN_EMAIL     = "admin@gestorrh.co"
 
 # ── Estado de sesión ──────────────────────────────────────────────────────────
 DEFAULTS = {
@@ -66,7 +66,7 @@ def pantalla_auth():
         st.markdown("""
         <div style='text-align:center;padding:2rem 0 1rem'>
             <div style='font-size:2.5rem'>📄</div>
-            <h1 style='color:#1B3F6E;margin:0'>RH Fácil</h1>
+            <h1 style='color:#1B3F6E;margin:0'>GestorRH Colombia</h1>
             <p style='color:#6B7280;margin-top:4px'>
                 Documentos laborales para PYMES colombianas
             </p>
@@ -101,8 +101,8 @@ def pantalla_auth():
                 <p style='margin:0;font-size:.85rem;color:#1B3F6E;font-weight:600'>
                     🎯 Cuenta Demo — acceso completo</p>
                 <p style='margin:4px 0 0;font-size:.82rem;color:#374151'>
-                    <b>Usuario:</b> demo@rhfacil.co &nbsp;·&nbsp;
-                    <b>Contraseña:</b> RHFacil2026</p>
+                    <b>Usuario:</b> demo@gestorrh.co &nbsp;·&nbsp;
+                    <b>Contraseña:</b> GestorRHCol2026</p>
             </div>""", unsafe_allow_html=True)
 
         with tab_reg:
@@ -243,7 +243,7 @@ empresa_ok = bool(st.session_state.datos_empresa.get("nombre") and
 # SIDEBAR
 # ══════════════════════════════════════════════════════════════════════════════
 with st.sidebar:
-    st.markdown("## 📄 RH Fácil")
+    st.markdown("## 📄 GestorRH Colombia")
     st.caption(f"Hola, **{u['nombre'].split()[0]}** 👋")
     if usar_supabase():
         st.caption("🟢 Base de datos activa")
@@ -335,7 +335,7 @@ if pagina == "🏠  Inicio":
         <p style='margin:0;opacity:.85;font-size:1.05rem'>
             {nombre_emp} · Plan <b>{u['plan'].capitalize()}</b></p>
         <p style='margin:.8rem 0 0;opacity:.7;font-size:.9rem'>
-            RH Fácil te ayuda a generar certificados laborales, cartas de vacaciones
+            GestorRH Colombia te ayuda a generar certificados laborales, cartas de vacaciones
             y liquidaciones en segundos, cumpliendo el CST colombiano 2026.
         </p>
     </div>""", unsafe_allow_html=True)
@@ -808,7 +808,7 @@ elif pagina == "⚡  Generar":
                 if Path(p).exists(): zf.write(p, Path(p).name)
         buf.seek(0)
         st.download_button("⬇️ Descargar ZIP con todos los documentos", buf,
-            file_name=f"RHFacil_{de.get('nombre','').replace(' ','_')}_{date.today()}.zip",
+            file_name=f"GestorRHCol_{de.get('nombre','').replace(' ','_')}_{date.today()}.zip",
             mime="application/zip", type="primary")
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -839,7 +839,7 @@ elif pagina == "💎  Planes":
                 st.markdown("<p style='text-align:center;color:#059669;font-size:.8rem'>"
                             "✅ Plan actual</p>", unsafe_allow_html=True)
             else:
-                msg = (f"Hola, quiero activar el plan {plan['nombre']} de RH Fácil. "
+                msg = (f"Hola, quiero activar el plan {plan['nombre']} de GestorRH Colombia. "
                        f"Mi correo es {u['email']}.")
                 st.link_button("💬 Activar por WhatsApp",
                     link_whatsapp(msg), use_container_width=True)

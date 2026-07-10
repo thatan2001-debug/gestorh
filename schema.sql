@@ -1,5 +1,5 @@
 -- ================================================================
--- RH Fácil — Schema Supabase
+-- GestorRH Colombia — Schema Supabase
 -- Ejecutar en: Supabase → SQL Editor → New Query
 -- ================================================================
 
@@ -63,8 +63,8 @@ create table if not exists documentos_log (
 -- ── Usuarios iniciales ───────────────────────────────────────────
 insert into usuarios (email, nombre, password_hash, plan, activo, es_admin, es_demo)
 values
-  ('demo@rhfacil.co',  'Usuario Demo',   '3f5c2e77e3f42c44f2a53f2b27e91b0c3e88e4e6d9c76d37cf2f7b57a44e8ab9', 'pro',          true, false, true),
-  ('admin@rhfacil.co', 'Administrador',  'b2d4a1f8c3e5g7h9j0k2l4m6n8p0q2r4s6t8u0v2w4x6y8z0a1b3c5d7e9f0g2', 'empresarial',  true, true,  false)
+  ('demo@gestorrh.co',  'Usuario Demo',   '3f5c2e77e3f42c44f2a53f2b27e91b0c3e88e4e6d9c76d37cf2f7b57a44e8ab9', 'pro',          true, false, true),
+  ('admin@gestorrh.co', 'Administrador',  'b2d4a1f8c3e5g7h9j0k2l4m6n8p0q2r4s6t8u0v2w4x6y8z0a1b3c5d7e9f0g2', 'empresarial',  true, true,  false)
 on conflict (email) do nothing;
 
 -- ── RLS (Row Level Security) — básico para producción ────────────

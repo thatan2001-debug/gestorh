@@ -118,7 +118,7 @@ def exportar_excel_simple(resultados: list[dict], ruta_salida: str):
         # Hoja de aviso legal
         ws_av = w.book.create_sheet("Aviso Legal")
         avisos = [
-            "AVISO IMPORTANTE — RH Fácil",
+            "AVISO IMPORTANTE — GestorRH Colombia",
             "",
             "Las liquidaciones de esta hoja son ESTIMACIONES DE REFERENCIA.",
             "Fórmulas usadas (base año comercial 360 días):",
@@ -159,7 +159,7 @@ def exportar_excel_con_formulas(resultados: list[dict], ruta_salida: str):
 
     # Título
     ws.merge_cells("A1:H1")
-    ws["A1"] = "LIQUIDACIÓN DE PRESTACIONES SOCIALES — RH Fácil"
+    ws["A1"] = "LIQUIDACIÓN DE PRESTACIONES SOCIALES — GestorRH Colombia"
     ws["A1"].font  = Font(bold=True, size=14, color=AZUL)
     ws["A1"].alignment = Alignment(horizontal="center")
     ws.row_dimensions[1].height = 28

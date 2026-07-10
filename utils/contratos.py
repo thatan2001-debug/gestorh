@@ -511,3 +511,183 @@ def _estilo_articulo(estilos):
         "articulo", parent=estilos["cuerpo"],
         fontSize=9, textColor=colors.HexColor("#6B7280"),
         alignment=TA_CENTER, spaceBefore=0, spaceAfter=0)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# OTROSÍ AL CONTRATO — Modificación por cambio de cargo, salario o lugar
+# ══════════════════════════════════════════════════════════════════════════════
+
+def generar_otrosi(empleado, datos_empresa, ruta_salida, config,
+                    disenio=1, usar_marca_agua=False,
+                    membrete_path=None, usar_logo_enc=True):
+    """
+    Otrosí al contrato de trabajo — modifica términos originales.
+    config debe incluir:
+      - tipo_cambio: lista con 'cargo' | 'salario' | 'lugar' (uno o varios)
+      - fecha_vigencia: fecha desde la cual aplica
+      - nuevo_cargo: (si cambia cargo)
+      - nuevo_salario: (si cambia salario)
+      - nuevas_funciones: (opcional si cambia cargo)
+      - nuevo_lugar: (si cambia lugar)
+      - motivo: motivo del cambio (opcional)
+    """
+    paleta  = PALETAS.get(disenio, PALETAS[1])
+    estilos = _estilos_para(paleta)
+    logo    = datos_empresa.get("logo_path") if usar_logo_enc else None
+    tiene_logo     = bool(logo and Path(logo).exists())
+    tiene_membrete = bool(membrete_path and Path(membrete_path).exists())
+    margen_sup = MARGEN_SUP_MEMBRETE if (tiene_logo or tiene_membrete) else MARGEN_SUP_NORMAL
+
+    doc = SimpleDocTemplate(ruta_salida, pagesize=letter,
+        topMargin=margen_sup, bottomMargin=MARGEN_INF,
+        leftMargin=MARGEN_IZQ, rightMargin=MARGEN_DER)
+    el = []
+
+    _encabezado(el, datos_empresa, estilos, paleta, disenio, membrete_path=membrete_path)
+    el.append(Paragraph("OTROSÍ AL CONTRATO INDIVIDUAL DE TRABAJO",
+                        estilos["titulo"]))
+    el.append(Paragraph("<i>Art. 22 y 43 CST — Modificación de las condiciones contractuales</i>",
+                        _estilo_articulo(estilos)))
+    el.append(Spacer(1, 20))
+
+    # Ciudad y fecha
+    el.append(Paragraph(
+        f"{datos_empresa.get('ciudad','Colombia')}, {fecha_hoy_larga()}",
+        estilos["cuerpo"]))
+    el.append(Spacer(1, 14))
+
+    # Partes
+    fi = fmt_fecha(empleado.get("Fecha ingreso",""))
+    empresa   = datos_empresa.get("nombre","")
+    nombre    = empleado.get("Nombre","")
+    documento = empleado.get("Documento","")
+    cargo_actual = empleado.get("Cargo","")
+
+    el.append(Paragraph("<b>ENTRE LAS PARTES:</b>", estilos["cuerpo"]))
+    el.append(Spacer(1, 6))
+    el.append(Paragraph(
+        f"<b>EL EMPLEADOR:</b> {empresa}, identificada con NIT "
+        f"{datos_empresa.get('nit','')}, representada legalmente por "
+        f"{datos_empresa.get('representante','')}.", estilos["cuerpo"]))
+    el.append(Paragraph(
+        f"<b>EL TRABAJADOR:</b> {nombre}, identificado(a) con cédula No. "
+        f"{documento}, quien actualmente se desempeña como <b>{cargo_actual}</b> "
+        f"en la empresa desde el <b>{fi}</b>.", estilos["cuerpo"]))
+    el.append(Spacer(1, 14))
+
+    # Preámbulo
+    el.append(Paragraph(
+        "Las partes, de común acuerdo, han decidido celebrar el presente "
+        "<b>OTROSÍ</b> para modificar las siguientes condiciones del contrato "
+        "individual de trabajo suscrito originalmente entre las partes, "
+        "manteniendo vigentes las demás cláusulas que no sean expresamente "
+        "modificadas por este documento:", estilos["cuerpo"]))
+    el.append(Spacer(1, 8))
+
+    # Fecha de vigencia
+    fecha_vig = fmt_fecha(config.get("fecha_vigencia",""))
+
+    # Cláusulas de cambios (numeración dinámica)
+    tipos = config.get("tipo_cambio", [])
+    num = 1
+
+    # ── Cambio de cargo ─────────────────────────────────────────────────
+    if "cargo" in tipos:
+        nuevo_cargo = config.get("nuevo_cargo","")
+        el.append(Paragraph(
+            f"<b>CLÁUSULA {_num_romano(num)} — CAMBIO DE CARGO:</b> A partir "
+            f"del <b>{fecha_vig}</b>, EL TRABAJADOR pasará a desempeñar el "
+            f"cargo de <b>{nuevo_cargo}</b>, con las funciones inherentes al "
+            f"mismo y aquellas que le sean asignadas por su superior inmediato. "
+            f"Este cambio no implica desmejora en las condiciones laborales "
+            f"del TRABAJADOR (Art. 23 CST).",
+            estilos["cuerpo"]))
+
+        if config.get("nuevas_funciones"):
+            el.append(Paragraph(
+                f"<b>Funciones específicas del nuevo cargo:</b> "
+                f"{config['nuevas_funciones']}", estilos["cuerpo"]))
+        num += 1
+
+    # ── Cambio de salario ───────────────────────────────────────────────
+    if "salario" in tipos:
+        salario_actual = float(empleado.get("Salario",0))
+        nuevo_salario  = float(config.get("nuevo_salario",0))
+        sal_actual_fmt = f"${salario_actual:,.0f}".replace(",",".")
+        sal_nuevo_fmt  = f"${nuevo_salario:,.0f}".replace(",",".")
+        es_aumento = nuevo_salario > salario_actual
+
+        el.append(Paragraph(
+            f"<b>CLÁUSULA {_num_romano(num)} — CAMBIO DE SALARIO:</b> A partir "
+            f"del <b>{fecha_vig}</b>, el salario mensual del TRABAJADOR se "
+            f"modifica de <b>{sal_actual_fmt}</b> a <b>{sal_nuevo_fmt}</b> "
+            f"pesos colombianos, pagaderos en las mismas fechas y forma "
+            f"habituales del EMPLEADOR. "
+            + ("Este incremento no implica renuncia a los derechos ya "
+               "consolidados del TRABAJADOR."
+               if es_aumento else
+               "Esta modificación se realiza de común acuerdo entre las partes "
+               "conforme al Art. 43 CST."),
+            estilos["cuerpo"]))
+        num += 1
+
+    # ── Cambio de lugar ─────────────────────────────────────────────────
+    if "lugar" in tipos:
+        lugar_actual = config.get("lugar_actual",
+                                   datos_empresa.get("ciudad","Colombia"))
+        nuevo_lugar  = config.get("nuevo_lugar","")
+
+        el.append(Paragraph(
+            f"<b>CLÁUSULA {_num_romano(num)} — CAMBIO DE LUGAR DE TRABAJO:</b> "
+            f"A partir del <b>{fecha_vig}</b>, EL TRABAJADOR prestará sus "
+            f"servicios en <b>{nuevo_lugar}</b>, en reemplazo del lugar "
+            f"anterior ({lugar_actual}). Este cambio no altera las demás "
+            f"condiciones del contrato (Art. 32 CST — jus variandi).",
+            estilos["cuerpo"]))
+        num += 1
+
+    # ── Motivo (opcional) ────────────────────────────────────────────────
+    if config.get("motivo"):
+        el.append(Paragraph(
+            f"<b>MOTIVO DEL CAMBIO:</b> {config['motivo']}",
+            estilos["cuerpo"]))
+
+    # Cláusula de vigencia
+    el.append(Paragraph(
+        f"<b>CLÁUSULA {_num_romano(num)} — VIGENCIA Y DEMÁS CONDICIONES:</b> "
+        f"Las modificaciones establecidas en el presente otrosí entran en "
+        f"vigencia a partir del <b>{fecha_vig}</b> y las demás cláusulas del "
+        f"contrato original permanecen inalteradas y vigentes. Este otrosí "
+        f"forma parte integral del contrato individual de trabajo original.",
+        estilos["cuerpo"]))
+
+    el.append(Spacer(1, 12))
+    el.append(Paragraph(
+        "<b>Aviso:</b> Este documento es un modelo de referencia. Se recomienda "
+        "revisión por abogado laboral para verificar el cumplimiento del "
+        "Art. 43 CST (mutuo acuerdo) y evitar interpretaciones de desmejora "
+        "que puedan generar reclamaciones futuras.",
+        estilos["nota"]))
+
+    el.append(Spacer(1, 32))
+    el.append(Paragraph(
+        f"En señal de conformidad, las partes firman el presente otrosí el "
+        f"día <b>{fecha_hoy_larga()}</b>.", estilos["cuerpo"]))
+    el.append(Spacer(1, 40))
+
+    _firmas_dobles(el,
+        representante=datos_empresa.get("representante",""),
+        empresa=empresa,
+        nombre_empleado=nombre,
+        cedula=documento,
+        paleta=paleta, estilos=estilos,
+        cargo_firmante=datos_empresa.get("_cargo_firmante","Representante Legal"))
+
+    _fn = lambda c,d: _pie(c, d, paleta, logo, usar_marca_agua)
+    doc.build(el, onFirstPage=_fn, onLaterPages=_fn)
+
+
+def _num_romano(n: int) -> str:
+    """Convierte 1-10 a números romanos para las cláusulas."""
+    romanos = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"]
+    return romanos[n] if 0 < n < len(romanos) else str(n)

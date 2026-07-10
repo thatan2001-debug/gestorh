@@ -1,5 +1,5 @@
 """
-Estilos CSS globales para RH Fácil.
+Estilos CSS globales para GestorRH Colombia.
 Diseño limpio y profesional: blanco + azul corporativo.
 """
 

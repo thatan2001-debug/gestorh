@@ -1,6 +1,6 @@
 """
 Extrae el membrete/encabezado de un archivo Word (.docx) para usarlo
-como encabezado en los PDFs generados por RH Fácil.
+como encabezado en los PDFs generados por GestorRH Colombia.
 
 Estrategia:
 1. Intenta extraer la imagen del encabezado del Word (si existe)

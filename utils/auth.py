@@ -1,4 +1,4 @@
-"""Autenticación RH Fácil — usa db.py como capa de datos."""
+"""Autenticación GestorRH Colombia — usa db.py como capa de datos."""
 
 import hashlib
 from pathlib import Path
@@ -10,7 +10,7 @@ from utils.db import (
     stats_admin,
 )
 
-ADMIN_EMAIL = "admin@rhfacil.co"
+ADMIN_EMAIL = "admin@gestorrh.co"
 
 def _hash(pw: str) -> str:
     return hashlib.sha256(pw.encode()).hexdigest()

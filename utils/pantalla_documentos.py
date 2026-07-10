@@ -1,5 +1,5 @@
 """
-Dashboard y pantalla unificada de generación de documentos para RH Fácil.
+Dashboard y pantalla unificada de generación de documentos para GestorRH Colombia.
 Integra: métricas reales, catálogo de documentos, historial y generación.
 """
 
@@ -349,7 +349,7 @@ def pantalla_generar(usuario: dict, datos_empresa: dict):
             st.download_button(
                 "⬇️ Descargar todos (ZIP)",
                 buf, mime="application/zip", type="primary",
-                file_name=f"RHFacil_{empresa_nb}_{date.today()}.zip",
+                file_name=f"GestorRHCol_{empresa_nb}_{date.today()}.zip",
             )
             if st.button("🗑️ Nueva generación"):
                 st.session_state.carrito_docs = {}
