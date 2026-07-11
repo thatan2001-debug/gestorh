@@ -52,12 +52,50 @@ if "activar" in _query_params and not st.session_state.get("_activacion_procesad
 
 # Mostrar mensajes de activación por enlace
 if st.session_state.get("_activacion_exitosa"):
-    st.success(
-        f"🎉 ¡Cuenta **{st.session_state['_activacion_exitosa']}** activada exitosamente! "
-        f"Ya puedes iniciar sesión."
-    )
+    _email_act = st.session_state["_activacion_exitosa"]
+    st.markdown(f"""
+    <div style="background:linear-gradient(135deg,#059669,#10B981);color:white;
+        padding:28px 32px;border-radius:14px;margin:16px 0;
+        box-shadow:0 4px 20px rgba(5,150,105,.25);text-align:center">
+        <div style="font-size:3rem;margin-bottom:8px">🎉</div>
+        <h2 style="margin:0 0 8px;font-size:1.5rem;color:white">
+            ¡Registro exitoso!
+        </h2>
+        <p style="margin:0 0 6px;opacity:.95;font-size:1rem">
+            La cuenta <b>{_email_act}</b> fue activada correctamente.
+        </p>
+        <p style="margin:0;opacity:.9;font-size:.95rem">
+            ✅ Ya puedes iniciar sesión con tu correo y contraseña.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
     st.balloons()
     del st.session_state["_activacion_exitosa"]
+
+# Mostrar mensaje cuando activó por código (formulario en pantalla)
+if st.session_state.get("_activacion_exitosa_completa"):
+    _datos_act = st.session_state["_activacion_exitosa_completa"]
+    _nombre_corto = _datos_act["nombre"].split()[0] if _datos_act.get("nombre") else ""
+    st.markdown(f"""
+    <div style="background:linear-gradient(135deg,#059669,#10B981);color:white;
+        padding:32px 36px;border-radius:14px;margin:20px 0;
+        box-shadow:0 4px 20px rgba(5,150,105,.25);text-align:center">
+        <div style="font-size:3.5rem;margin-bottom:10px">✅</div>
+        <h2 style="margin:0 0 10px;font-size:1.6rem;color:white">
+            ¡Bienvenido{f", {_nombre_corto}" if _nombre_corto else ""}!
+        </h2>
+        <p style="margin:0 0 8px;opacity:.95;font-size:1.05rem">
+            Tu cuenta <b>{_datos_act['email']}</b> fue activada exitosamente.
+        </p>
+        <div style="background:rgba(255,255,255,.15);border-radius:8px;
+            padding:14px 20px;margin-top:16px;font-size:.95rem">
+            👉 <b>Ya puedes iniciar sesión</b> con tu correo y contraseña
+            en el formulario de abajo.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.balloons()
+    del st.session_state["_activacion_exitosa_completa"]
 
 if st.session_state.get("_activacion_error"):
     st.error(f"❌ Error al activar por enlace: {st.session_state['_activacion_error']}")
@@ -126,16 +164,6 @@ def pantalla_auth():
                     st.rerun()
                 else:
                     st.error(msg)
-
-            st.divider()
-            st.markdown("""
-            <div style='background:#EFF6FF;border-radius:10px;padding:1rem'>
-                <p style='margin:0;font-size:.85rem;color:#1B3F6E;font-weight:600'>
-                    🎯 Cuenta Demo — acceso completo</p>
-                <p style='margin:4px 0 0;font-size:.82rem;color:#374151'>
-                    <b>Usuario:</b> demo@gestorrh.co &nbsp;·&nbsp;
-                    <b>Contraseña:</b> GestorRHCol2026</p>
-            </div>""", unsafe_allow_html=True)
 
         with tab_reg:
             st.markdown("<br>", unsafe_allow_html=True)
@@ -215,8 +243,10 @@ def pantalla_auth():
                     ok_val, msg_val = validar_por_codigo(registro["email"], codigo_input)
                     if ok_val:
                         usuario_activar(registro["email"])
-                        st.balloons()
-                        st.success("🎉 ¡Cuenta activada! Ya puedes iniciar sesión.")
+                        st.session_state["_activacion_exitosa_completa"] = {
+                            "email":  registro["email"],
+                            "nombre": registro["nombre"],
+                        }
                         del st.session_state["registro_pendiente"]
                         st.rerun()
                     else:
