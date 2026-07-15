@@ -287,3 +287,82 @@ def stats_admin():
         "total_docs": sum(u.get("docs_usados",0) for u in us),
         "por_plan":   {p: sum(1 for u in us if u.get("plan")==p) for p in PLANES},
     }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MULTIEMPRESA — Para contadores/gestores con varias empresas
+# ══════════════════════════════════════════════════════════════════════════════
+
+def empresas_listar(email_usuario: str) -> list:
+    """Lista todas las empresas de un usuario. Retorna [{id, nombre, nit, es_activa}, ...]"""
+    email = email_usuario.strip().lower()
+    if supabase_ok():
+        r = _db().table("empresas_multi").select("*").eq("email_usuario", email).execute()
+        return r.data or []
+    # Fallback JSON
+    d = _jl()
+    return d.get(email, {}).get("empresas_lista", [])
+
+
+def empresa_agregar(email_usuario: str, datos: dict) -> tuple[bool, str, str]:
+    """
+    Agrega una nueva empresa al usuario (para contadores/multi).
+    Retorna (ok, mensaje, id_empresa)
+    """
+    email = email_usuario.strip().lower()
+    import uuid
+    id_emp = str(uuid.uuid4())
+    payload = {
+        "id":               id_emp,
+        "email_usuario":    email,
+        "nombre":           datos.get("nombre",""),
+        "nit":              datos.get("nit",""),
+        "representante":    datos.get("representante",""),
+        "ciudad":           datos.get("ciudad",""),
+        "correo_empresa":   datos.get("correo_empresa",""),
+        "telefono":         datos.get("telefono_empresa",""),
+        "config_json":      datos,  # guardar todo lo demás como JSON
+        "created_at":       datetime.now().isoformat(),
+    }
+    if supabase_ok():
+        try:
+            _db().table("empresas_multi").insert(payload).execute()
+            return True, "Empresa agregada correctamente.", id_emp
+        except Exception as e:
+            return False, f"Error: {e}", ""
+    # Fallback JSON
+    d = _jl()
+    if email not in d: d[email] = {}
+    if "empresas_lista" not in d[email]: d[email]["empresas_lista"] = []
+    d[email]["empresas_lista"].append(payload)
+    _js(d)
+    return True, "Empresa agregada correctamente.", id_emp
+
+
+def empresa_actualizar_id(id_empresa: str, datos: dict) -> bool:
+    """Actualiza una empresa específica del sistema multi."""
+    if supabase_ok():
+        try:
+            _db().table("empresas_multi").update({
+                "nombre": datos.get("nombre",""),
+                "nit": datos.get("nit",""),
+                "representante": datos.get("representante",""),
+                "config_json": datos,
+                "updated_at": datetime.now().isoformat(),
+            }).eq("id", id_empresa).execute()
+            return True
+        except Exception as e:
+            print(f"Error actualizando empresa: {e}")
+            return False
+    return True
+
+
+def empresa_eliminar_id(id_empresa: str) -> bool:
+    """Elimina una empresa del sistema multi."""
+    if supabase_ok():
+        try:
+            _db().table("empresas_multi").delete().eq("id", id_empresa).execute()
+            return True
+        except Exception:
+            return False
+    return True

@@ -314,3 +314,30 @@ alter table tokens_activacion enable row level security;
 drop policy if exists "tokens_service" on tokens_activacion;
 create policy "tokens_service" on tokens_activacion
   for all to service_role using (true) with check (true);
+
+
+-- ================================================================
+-- TABLA: empresas_multi (agregada en v2.2)
+-- Para contadores que gestionan varias empresas
+-- ================================================================
+create table if not exists empresas_multi (
+  id             uuid primary key,
+  email_usuario  text not null,
+  nombre         text not null,
+  nit            text,
+  representante  text,
+  ciudad         text,
+  correo_empresa text,
+  telefono       text,
+  config_json    jsonb,
+  created_at     timestamptz default now(),
+  updated_at     timestamptz default now()
+);
+
+create index if not exists idx_empresas_multi_usuario on empresas_multi(email_usuario);
+
+alter table empresas_multi enable row level security;
+
+drop policy if exists "empresas_multi_service" on empresas_multi;
+create policy "empresas_multi_service" on empresas_multi
+  for all to service_role using (true) with check (true);

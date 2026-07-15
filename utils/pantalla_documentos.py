@@ -340,17 +340,32 @@ def pantalla_generar(usuario: dict, datos_empresa: dict):
             usuario.get("plan","gratuito"), enviar, descargar
         )
         if archivos and descargar:
-            buf = io.BytesIO()
-            with zipfile.ZipFile(buf, "w") as zf:
-                for p in archivos:
-                    if Path(p).exists(): zf.write(p, Path(p).name)
-            buf.seek(0)
             empresa_nb = datos_empresa.get("nombre","empresa").replace(" ","_")
-            st.download_button(
-                "⬇️ Descargar todos (ZIP)",
-                buf, mime="application/zip", type="primary",
-                file_name=f"GestorRHCol_{empresa_nb}_{date.today()}.zip",
-            )
+            # Adaptativo: PDF único si es uno solo, ZIP si son varios
+            if len(archivos) == 1:
+                ruta_unica = archivos[0]
+                if Path(ruta_unica).exists():
+                    with open(ruta_unica, "rb") as f:
+                        st.download_button(
+                            f"⬇️ Descargar {Path(ruta_unica).name}",
+                            f.read(),
+                            file_name=Path(ruta_unica).name,
+                            mime="application/pdf",
+                            type="primary",
+                            use_container_width=True,
+                        )
+            else:
+                buf = io.BytesIO()
+                with zipfile.ZipFile(buf, "w") as zf:
+                    for p in archivos:
+                        if Path(p).exists(): zf.write(p, Path(p).name)
+                buf.seek(0)
+                st.download_button(
+                    f"⬇️ Descargar {len(archivos)} documentos (ZIP)",
+                    buf, mime="application/zip", type="primary",
+                    file_name=f"GestorRHCol_{empresa_nb}_{date.today()}.zip",
+                    use_container_width=True,
+                )
             if st.button("🗑️ Nueva generación"):
                 st.session_state.carrito_docs = {}
                 st.rerun()
@@ -594,18 +609,25 @@ def _ejecutar_generacion_unificada(
             "Cargo":  emp.get("cargo",""),
             "Salario": conf.get("salario_base", float(emp.get("salario",0))),
             "Fecha ingreso": emp.get("fecha_ingreso",""),
+            "Fecha retiro":  emp.get("fecha_retiro",""),  # pasar fecha retiro si existe
             "Tipo contrato": emp.get("tipo_contrato","Indefinido"),
             "Ingreso promedio variable": conf.get("salario_variable",0),
         }
 
+        # Si el empleado ya se retiró y pidieron cert con salario, usar sin salario
+        empleado_retirado = bool(emp.get("fecha_retiro","").strip())
+        tipo_efectivo = tipo_doc
+        if tipo_doc == "certificado_con_salario" and empleado_retirado:
+            tipo_efectivo = "certificado_sin_salario"
+
         ruta = None
         try:
-            if tipo_doc == "certificado_con_salario":
+            if tipo_efectivo == "certificado_con_salario":
                 ruta = str(SALIDAS / f"Certificado_{nb}.pdf")
                 generar_certificado(emp_doc, datos_cert, ruta, disenio,
                     usar_mda, membrete, usar_logo)
 
-            elif tipo_doc == "certificado_sin_salario":
+            elif tipo_efectivo == "certificado_sin_salario":
                 ruta = str(SALIDAS / f"CertSinSalario_{nb}.pdf")
                 generar_certificado_sin_salario(emp_doc, datos_cert, ruta, disenio,
                     usar_mda, membrete, usar_logo)
@@ -635,6 +657,15 @@ def _ejecutar_generacion_unificada(
                 ruta = str(SALIDAS / f"Liquidacion_{nb}.pdf")
                 generar_liquidacion(res, datos_liq, ruta, disenio,
                     usar_mda, membrete, True, usar_logo)
+
+                # ── AUTO-UPDATE: guardar fecha de retiro y marcar como retirado ──
+                from utils.empleados_db import empleado_guardar
+                fecha_retiro_str = fc.strftime("%d/%m/%Y")
+                emp_actualizado = {**emp,
+                    "fecha_retiro": fecha_retiro_str,
+                    "activo":       False,   # marcarlo como retirado
+                }
+                empleado_guardar(email, emp_actualizado)
 
             elif tipo_doc == "paz_salvo":
                 ruta = str(SALIDAS / f"PazSalvo_{nb}.pdf")

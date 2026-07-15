@@ -404,17 +404,57 @@ with st.sidebar:
     if "ir_a" in st.session_state:
         st.session_state.pagina_actual = st.session_state.pop("ir_a")
 
-    # CSS para botones grandes tipo tarjeta
+    # CSS para botones grandes tipo tarjeta con contraste
     st.markdown("""
     <style>
+    /* Botones del sidebar — versión mejorada con contraste */
     div[data-testid="stSidebar"] .stButton > button {
         text-align: left !important;
         justify-content: flex-start !important;
-        font-size: 0.95rem !important;
-        padding: 12px 16px !important;
-        margin-bottom: 4px !important;
+        font-size: 0.98rem !important;
+        padding: 14px 18px !important;
+        margin-bottom: 6px !important;
         border-radius: 10px !important;
-        font-weight: 500 !important;
+        font-weight: 600 !important;
+        transition: all 0.2s ease !important;
+    }
+    /* Botón inactivo (secondary): fondo oscuro, texto BLANCO visible */
+    div[data-testid="stSidebar"] .stButton > button[kind="secondary"] {
+        background: rgba(255, 255, 255, 0.08) !important;
+        color: #FFFFFF !important;
+        border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    }
+    div[data-testid="stSidebar"] .stButton > button[kind="secondary"]:hover {
+        background: rgba(255, 255, 255, 0.18) !important;
+        border-color: rgba(255, 255, 255, 0.35) !important;
+        transform: translateX(2px) !important;
+    }
+    /* Botón activo (primary): azul brillante, texto blanco */
+    div[data-testid="stSidebar"] .stButton > button[kind="primary"] {
+        background: linear-gradient(135deg, #2D6BE4, #1B3F6E) !important;
+        color: #FFFFFF !important;
+        border: none !important;
+        box-shadow: 0 4px 12px rgba(45, 107, 228, 0.4) !important;
+    }
+
+    /* Pestañas (st.tabs) con mejor visual */
+    div[data-testid="stTabs"] button[role="tab"] {
+        font-size: 1rem !important;
+        font-weight: 600 !important;
+        padding: 12px 24px !important;
+        border-radius: 8px 8px 0 0 !important;
+        transition: all 0.2s ease !important;
+    }
+    div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
+        background: linear-gradient(135deg, #2D6BE4, #1B3F6E) !important;
+        color: #FFFFFF !important;
+    }
+    div[data-testid="stTabs"] button[role="tab"]:not([aria-selected="true"]) {
+        color: #6B7280 !important;
+    }
+    div[data-testid="stTabs"] button[role="tab"]:not([aria-selected="true"]):hover {
+        background: #EFF6FF !important;
+        color: #1B3F6E !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -578,6 +618,68 @@ elif pagina == "🏢  Mi empresa":
     st.markdown("# Datos de tu empresa")
     st.caption("Se guardan automáticamente en la nube. Al cerrar sesión y volver, estarán aquí.")
 
+    # ── Multiempresa (para contadores) ────────────────────────────────
+    from utils.db import empresas_listar, empresa_agregar, empresa_eliminar_id
+    empresas_extra = empresas_listar(u["email"])
+
+    with st.expander(
+        f"👥 Multiempresa — Gestionar varias empresas ({len(empresas_extra)} adicional{'es' if len(empresas_extra)!=1 else ''})",
+        expanded=False
+    ):
+        st.caption(
+            "**Para contadores y gestores:** puedes administrar los documentos de "
+            "varias empresas desde una sola cuenta. La empresa principal es la del "
+            "formulario de abajo. Aquí puedes agregar las adicionales."
+        )
+
+        # Listar empresas adicionales
+        if empresas_extra:
+            st.markdown("**Empresas adicionales configuradas:**")
+            for e in empresas_extra:
+                ec1, ec2, ec3 = st.columns([4, 3, 1])
+                with ec1:
+                    st.markdown(f"🏢 **{e.get('nombre','')}**")
+                with ec2:
+                    st.caption(f"NIT: {e.get('nit','—')}")
+                with ec3:
+                    if st.button("🗑️", key=f"del_emp_{e.get('id','')}"):
+                        empresa_eliminar_id(e.get("id",""))
+                        st.rerun()
+            st.divider()
+
+        # Formulario para agregar nueva empresa
+        st.markdown("**➕ Agregar nueva empresa:**")
+        with st.form("form_nueva_empresa"):
+            nc1, nc2 = st.columns(2)
+            with nc1:
+                new_nombre = st.text_input("Razón social *", key="ne_nombre",
+                    placeholder="Distribuciones XYZ SAS")
+                new_nit    = st.text_input("NIT *", key="ne_nit",
+                    placeholder="900987654-3")
+            with nc2:
+                new_rep    = st.text_input("Representante legal *", key="ne_rep")
+                new_ciudad = st.text_input("Ciudad", key="ne_ciudad",
+                    placeholder="Bogotá")
+
+            add_emp = st.form_submit_button("💾 Agregar empresa", type="primary")
+            if add_emp:
+                if not new_nombre or not new_nit or not new_rep:
+                    st.error("Completa los campos obligatorios (*)")
+                else:
+                    ok, msg, id_new = empresa_agregar(u["email"], {
+                        "nombre":         new_nombre,
+                        "nit":            new_nit,
+                        "representante":  new_rep,
+                        "ciudad":         new_ciudad,
+                    })
+                    if ok:
+                        st.success(f"✅ Empresa '{new_nombre}' agregada.")
+                        st.rerun()
+                    else:
+                        st.error(msg)
+
+    st.divider()
+
     with st.form("form_empresa"):
         c1, c2 = st.columns(2)
         de = st.session_state.datos_empresa
@@ -598,6 +700,38 @@ elif pagina == "🏢  Mi empresa":
                                value=de.get("telefono_empresa",""))
             logo          = st.file_uploader("Logo (PNG o JPG)",
                                type=["png","jpg","jpeg"])
+
+        # ── Formatos personalizados ─────────────────────────────────────
+        with st.expander("📎 Formatos personalizados (opcional)", expanded=False):
+            st.caption(
+                "Sube tu propio membrete o plantilla de liquidación para que "
+                "los documentos tengan la identidad visual de tu empresa."
+            )
+            cc1, cc2 = st.columns(2)
+            with cc1:
+                st.markdown("**🎨 Membrete personalizado**")
+                st.caption("Imagen con el header/pie que aparecerá en todos los documentos")
+                membrete_up = st.file_uploader(
+                    "Membrete (PNG o JPG)",
+                    type=["png","jpg","jpeg"],
+                    key="up_membrete",
+                    help="Recomendado: 2550x300px (ancho carta). Se ubicará en la parte superior."
+                )
+                if de.get("membrete_path"):
+                    st.success("✅ Ya tienes membrete cargado")
+                    if st.checkbox("🗑️ Eliminar membrete actual", key="del_membrete"):
+                        st.session_state["_eliminar_membrete"] = True
+            with cc2:
+                st.markdown("**📊 Plantilla de liquidación**")
+                st.caption("Excel de referencia para tu formato interno de liquidaciones")
+                plantilla_liq_up = st.file_uploader(
+                    "Plantilla XLSX",
+                    type=["xlsx"],
+                    key="up_plantilla_liq",
+                    help="Se usará como base para exportar liquidaciones a Excel."
+                )
+                if de.get("plantilla_liq_path"):
+                    st.success("✅ Plantilla cargada")
 
         st.divider()
         st.markdown("### ✍️ Responsables de firma")
@@ -627,10 +761,28 @@ elif pagina == "🏢  Mi empresa":
                     logo_path = str(CARPETA_ASSETS / f"logo_{u['email'].split('@')[0]}.{ext}")
                     with open(logo_path,"wb") as f: f.write(logo.getbuffer())
 
+                # Guardar membrete personalizado
+                membrete_path = de.get("membrete_path")
+                if st.session_state.get("_eliminar_membrete"):
+                    membrete_path = None
+                    st.session_state["_eliminar_membrete"] = False
+                if membrete_up:
+                    ext_m = membrete_up.name.split(".")[-1]
+                    membrete_path = str(CARPETA_ASSETS / f"membrete_{u['email'].split('@')[0]}.{ext_m}")
+                    with open(membrete_path,"wb") as f: f.write(membrete_up.getbuffer())
+
+                # Guardar plantilla de liquidación personalizada
+                plantilla_liq_path = de.get("plantilla_liq_path")
+                if plantilla_liq_up:
+                    plantilla_liq_path = str(CARPETA_ASSETS / f"plantilla_liq_{u['email'].split('@')[0]}.xlsx")
+                    with open(plantilla_liq_path,"wb") as f: f.write(plantilla_liq_up.getbuffer())
+
                 datos_nuevo = {
                     "nombre":nombre,"nit":nit,"representante":representante,
                     "correo_empresa":correo_emp,"ciudad":ciudad,
                     "telefono_empresa":tel_emp,"logo_path":logo_path,
+                    "membrete_path":       membrete_path,
+                    "plantilla_liq_path":  plantilla_liq_path,
                     "firmante_cert_nombre": fcn.strip() or representante,
                     "firmante_cert_cargo":  fcc.strip() or "Representante Legal",
                     "firmante_vac_nombre":  fvn.strip() or representante,
@@ -643,6 +795,7 @@ elif pagina == "🏢  Mi empresa":
                 }
                 empresa_guardar(u["email"], datos_nuevo)
                 st.session_state.datos_empresa = datos_nuevo
+                st.session_state["membrete_path"] = membrete_path
                 st.success("✅ Datos guardados en la nube. Disponibles en tu próximo inicio de sesión.")
 
     # Opciones de logo

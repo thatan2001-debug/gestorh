@@ -91,31 +91,115 @@ def _dias_semestre_actual(fecha_ingreso: datetime, fecha_corte: datetime) -> int
     return _dias_360(inicio_calculo, fecha_corte)
 
 
-def _indemnizacion(salario: float, dias_totales: int, tipo_contrato: str) -> float:
+def _indemnizacion(salario: float, dias_totales: int, tipo_contrato: str,
+                    motivo_retiro: str = "despido_sin_justa_causa",
+                    dias_pendientes_fijo: int = 0) -> dict:
     """
-    Indemnización por despido sin justa causa — Art. 64 CST + Ley 789/2002.
+    Cálculo completo de indemnización según CST colombiano.
 
-    Contrato indefinido:
-      - Primer año: 30 días de salario.
-      - A partir del 2° año: 20 días adicionales por año o fracción.
-    Contrato a término fijo:
-      - Días pendientes hasta el vencimiento pactado (estimado).
+    Retorna dict con: {monto, dias, base_calculo, articulo, detalle}
+
+    Casos que generan indemnización:
+    ─────────────────────────────────────────────────────────────
+    • despido_sin_justa_causa      → Art. 64 CST (según tipo contrato)
+    • despido_por_incapacidad      → Art. 62 CST + Ley 361/1997
+    • terminacion_unilateral_empleador → mismo que sin justa causa
+    • fuero_maternidad             → Ley 1468/2011 (60 días + indem.)
+    • terminacion_periodo_prueba   → sin indemnización (Art. 78 CST)
+    • quiebra_empresa              → Art. 466 Código de Comercio
+
+    Casos SIN indemnización (retornan 0):
+    ─────────────────────────────────────────────────────────────
+    • renuncia_voluntaria          → Art. 47 CST
+    • con_justa_causa              → Art. 62 CST literal A
+    • mutuo_acuerdo                → Art. 61.b CST (salvo pacto)
+    • vencimiento_contrato         → Art. 46 CST (con preaviso 30 días)
+    • jubilacion                   → Art. 62.14 CST
     """
-    salario_diario = salario / 30
-    años = dias_totales / 360
-
+    motivo = str(motivo_retiro).strip().lower()
     tipo_lower = str(tipo_contrato).strip().lower()
-    if tipo_lower in TIPOS_CONTRATO_FIJO:
-        # Estimación: promedio de medio período restante (sin fecha fin exacta)
-        dias_indem = max(30, 90)   # mínimo orientativo; requiere fecha fin real
-        return round(salario_diario * dias_indem, 2)
 
-    # Contrato indefinido
-    if años <= 1:
-        return round(salario_diario * 30, 2)
+    # Casos SIN indemnización
+    sin_indem = {
+        "renuncia", "renuncia_voluntaria", "con_justa_causa",
+        "mutuo_acuerdo", "vencimiento_contrato", "vencimiento",
+        "jubilacion", "periodo_prueba", "terminacion_periodo_prueba",
+    }
+    if motivo in sin_indem:
+        return {
+            "monto": 0.0, "dias": 0,
+            "base_calculo": salario,
+            "articulo": "N/A",
+            "detalle": "Sin indemnización según causal de terminación",
+        }
+
+    salario_diario = salario / 30
+
+    # ── CONTRATO A TÉRMINO FIJO ─────────────────────────────────────
+    # Art. 64 CST: días pendientes hasta terminación pactada
+    if tipo_lower in TIPOS_CONTRATO_FIJO or "fijo" in tipo_lower:
+        # Si no hay fecha fin, mínimo 15 días (Ley 789/2002)
+        dias_indem = max(dias_pendientes_fijo, 15)
+        return {
+            "monto": round(salario_diario * dias_indem, 2),
+            "dias": dias_indem,
+            "base_calculo": salario,
+            "articulo": "Art. 64 CST · Ley 789/2002",
+            "detalle": f"Días pendientes hasta terminación pactada: {dias_indem} días",
+        }
+
+    # ── CONTRATO POR OBRA O LABOR ───────────────────────────────────
+    if "obra" in tipo_lower or "labor" in tipo_lower:
+        # Días pendientes de la obra o labor (mínimo 15)
+        dias_indem = max(dias_pendientes_fijo, 15)
+        return {
+            "monto": round(salario_diario * dias_indem, 2),
+            "dias": dias_indem,
+            "base_calculo": salario,
+            "articulo": "Art. 64 CST · Contrato por obra",
+            "detalle": f"Días para terminar la obra o labor: {dias_indem} días",
+        }
+
+    # ── CONTRATO INDEFINIDO ─────────────────────────────────────────
+    # Ley 789/2002 modificó Art. 64 CST
+    # Distingue entre salarios < 10 SMMLV y >= 10 SMMLV
+    umbral_10smmlv = 10 * SALARIO_MINIMO_2026
+
+    años = dias_totales / 360
+    años_completos = int(años)
+    fraccion = años - años_completos
+
+    if salario < umbral_10smmlv:
+        # Salario < 10 SMMLV: 30 días primer año + 20 días por cada año adicional (proporcional)
+        if años < 1:
+            dias_indem = 30
+            detalle = "Primer año (< 10 SMMLV): 30 días"
+        else:
+            # Años posteriores al primero (con fracción proporcional)
+            años_adicionales = años - 1
+            dias_adicionales = 20 * años_adicionales
+            dias_indem = 30 + dias_adicionales
+            detalle = (f"30 días (primer año) + {dias_adicionales:.1f} días "
+                       f"({años_adicionales:.2f} años adicionales × 20 días)")
     else:
-        dias_adicionales = 20 * (años - 1)
-        return round(salario_diario * (30 + dias_adicionales), 2)
+        # Salario >= 10 SMMLV: 20 días primer año + 15 días por año adicional (proporcional)
+        if años < 1:
+            dias_indem = 20
+            detalle = "Primer año (>= 10 SMMLV): 20 días"
+        else:
+            años_adicionales = años - 1
+            dias_adicionales = 15 * años_adicionales
+            dias_indem = 20 + dias_adicionales
+            detalle = (f"20 días (primer año) + {dias_adicionales:.1f} días "
+                       f"({años_adicionales:.2f} años adicionales × 15 días)")
+
+    return {
+        "monto": round(salario_diario * dias_indem, 2),
+        "dias": round(dias_indem, 1),
+        "base_calculo": salario,
+        "articulo": "Art. 64 CST · Ley 789/2002",
+        "detalle": detalle,
+    }
 
 
 def calcular_liquidacion_fila(
@@ -181,10 +265,29 @@ def calcular_liquidacion_fila(
     dias_mes_pendiente = min(fecha_corte.day, 30)
     salario_pendiente = round(salario / 30 * dias_mes_pendiente, 2)
 
-    # Indemnización: Art. 64 CST — solo si despido sin justa causa
-    indem = 0.0
-    if incluir_indemnizacion or str(motivo_retiro).strip().lower() == "despido_sin_justa_causa":
-        indem = _indemnizacion(salario, dias_total, tipo_contrato)
+    # Indemnización: Art. 64 CST — según motivo de retiro
+    # Casos que la generan: despido sin justa causa, terminación unilateral, etc.
+    MOTIVOS_CON_INDEMNIZACION = {
+        "despido_sin_justa_causa",
+        "sin_justa_causa",
+        "terminacion_unilateral_empleador",
+        "despido_por_incapacidad",
+    }
+    motivo_lower = str(motivo_retiro).strip().lower()
+    genera_indem = incluir_indemnizacion or motivo_lower in MOTIVOS_CON_INDEMNIZACION
+
+    if genera_indem:
+        info_indem = _indemnizacion(salario, dias_total, tipo_contrato,
+                                     motivo_retiro=motivo_lower)
+        indem = info_indem["monto"]
+        indem_dias = info_indem["dias"]
+        indem_articulo = info_indem["articulo"]
+        indem_detalle = info_indem["detalle"]
+    else:
+        indem = 0.0
+        indem_dias = 0
+        indem_articulo = "N/A"
+        indem_detalle = "Sin indemnización según causal"
 
     subtotal_prestaciones = round(cesantias + intereses_cesantias + prima + vacaciones, 2)
     total = round(subtotal_prestaciones + salario_pendiente + indem, 2)
@@ -211,11 +314,15 @@ def calcular_liquidacion_fila(
         "Vacaciones (Art. 186 CST)": vacaciones,
         "Salario pendiente (estimado)": salario_pendiente,
         "Indemnizacion (Art. 64 CST)": indem,
+        "Indemnizacion dias": indem_dias,
+        "Indemnizacion articulo": indem_articulo,
+        "Indemnizacion detalle": indem_detalle,
         # Total
         "Subtotal prestaciones": subtotal_prestaciones,
         "TOTAL LIQUIDACION ESTIMADA": total,
         # Meta
         "Motivo retiro": motivo_retiro,
+        "Genera indemnizacion": genera_indem,
         "Referencia legal": "CST + Decretos 1469/2025 y 159/2026 — SMMLV $1.750.905",
     }
 

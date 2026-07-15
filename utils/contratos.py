@@ -122,19 +122,13 @@ def _generar_contrato_base(empleado, datos_empresa, ruta_salida, config,
     if tipo != "PRESTACION":
         _clausulas_comunes(el, config, estilos)
 
-    el.append(Spacer(1, 12))
+    # Solo el aviso legal esencial para prestación (naturaleza civil)
     if tipo == "PRESTACION":
-        aviso = ("<b>Aviso importante:</b> Este contrato es de naturaleza CIVIL, "
-                 "NO genera relación laboral. Si en la ejecución se configuran "
-                 "elementos de subordinación, horario u órdenes, el trabajador "
-                 "podrá reclamar contrato realidad (Art. 22 CST). Consulte a un "
-                 "abogado antes de firmar.")
-    else:
-        aviso = ("<b>Aviso:</b> Este documento es un modelo de referencia generado "
-                 "automáticamente. Antes de firmar, debe ser revisado por un abogado "
-                 "laboral que verifique cláusulas específicas, cumplimiento de la "
-                 "normatividad vigente y ajustes al caso particular.")
-    el.append(Paragraph(aviso, estilos["nota"]))
+        el.append(Spacer(1, 12))
+        el.append(Paragraph(
+            "<b>Nota legal:</b> Este contrato es de naturaleza civil y no "
+            "constituye relación laboral en los términos del Artículo 22 del CST.",
+            estilos["nota"]))
 
     el.append(Spacer(1, 32))
     el.append(Paragraph(
@@ -488,20 +482,6 @@ def generar_carta_terminacion(empleado, datos_empresa, ruta_salida, config,
         "acepta haber recibido la presente comunicación en la fecha indicada.",
         estilos["nota"]))
 
-    if modalidad == "con_justa_causa":
-        aviso = ("<b>Advertencia legal:</b> La terminación con justa causa "
-                 "requiere debido proceso previo (llamado de atención, citación "
-                 "a descargos, evaluación de pruebas). Si el juez determina que "
-                 "no hubo justa causa real, el empleador deberá pagar la "
-                 "indemnización del Art. 64 CST. Consulte a un abogado laboral "
-                 "antes de proceder.")
-    else:
-        aviso = ("<b>Aviso:</b> Este documento es un modelo de referencia. "
-                 "Antes de notificar al trabajador, se recomienda validación "
-                 "por abogado laboral, especialmente para garantizar el debido "
-                 "proceso y la evidencia probatoria adecuada.")
-    el.append(Paragraph(aviso, estilos["nota"]))
-
     _fn = lambda c,d: _pie(c, d, paleta, logo, usar_marca_agua)
     doc.build(el, onFirstPage=_fn, onLaterPages=_fn)
 
@@ -660,14 +640,6 @@ def generar_otrosi(empleado, datos_empresa, ruta_salida, config,
         f"contrato original permanecen inalteradas y vigentes. Este otrosí "
         f"forma parte integral del contrato individual de trabajo original.",
         estilos["cuerpo"]))
-
-    el.append(Spacer(1, 12))
-    el.append(Paragraph(
-        "<b>Aviso:</b> Este documento es un modelo de referencia. Se recomienda "
-        "revisión por abogado laboral para verificar el cumplimiento del "
-        "Art. 43 CST (mutuo acuerdo) y evitar interpretaciones de desmejora "
-        "que puedan generar reclamaciones futuras.",
-        estilos["nota"]))
 
     el.append(Spacer(1, 32))
     el.append(Paragraph(

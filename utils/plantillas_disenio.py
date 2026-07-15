@@ -433,6 +433,11 @@ def generar_certificado(empleado: dict, datos_empresa: dict, ruta_salida: str,
     texto_var = (f" Adicionalmente, recibe ingresos variables con un promedio mensual "
                  f"de <b>{_fmt(ing_var)}</b>.") if ing_var > 0 else ""
 
+    # ⭐ Detectar si el empleado está retirado
+    fr_raw = empleado.get("Fecha retiro","") or empleado.get("fecha_retiro","")
+    esta_retirado = bool(fr_raw)
+    fr = fmt_fecha(fr_raw) if esta_retirado else ""
+
     # Fecha de expedición del documento
     fecha_expedicion = datetime.today().strftime("%d de %B de %Y").replace(
         "January","enero").replace("February","febrero").replace("March","marzo"
@@ -440,15 +445,26 @@ def generar_certificado(empleado: dict, datos_empresa: dict, ruta_salida: str,
         ).replace("July","julio").replace("August","agosto").replace("September","septiembre"
         ).replace("October","octubre").replace("November","noviembre").replace("December","diciembre")
 
-    el.append(Paragraph(
-        f"La empresa <b>{datos_empresa.get('nombre','')}</b>, identificada con NIT "
-        f"<b>{datos_empresa.get('nit','')}</b>, certifica que "
-        f"<b>{empleado.get('Nombre','')}</b>, identificado(a) con cédula No. "
-        f"<b>{empleado.get('Documento','')}</b>, labora en la compañía desde el "
-        f"<b>{fi}</b>{contrato_t} desempeñando el cargo de "
-        f"<b>{empleado.get('Cargo','')}</b>, con un salario mensual de "
-        f"<b>{_fmt(empleado.get('Salario',0))}</b>.{texto_var}",
-        estilos["cuerpo"]))
+    # ⭐ Si está retirado → certificación con fechas de inicio y fin, SIN salario
+    if esta_retirado:
+        el.append(Paragraph(
+            f"La empresa <b>{datos_empresa.get('nombre','')}</b>, identificada con NIT "
+            f"<b>{datos_empresa.get('nit','')}</b>, certifica que "
+            f"<b>{empleado.get('Nombre','')}</b>, identificado(a) con cédula No. "
+            f"<b>{empleado.get('Documento','')}</b>, laboró en la compañía desde el "
+            f"<b>{fi}</b> hasta el <b>{fr}</b>{contrato_t} desempeñando el cargo de "
+            f"<b>{empleado.get('Cargo','')}</b>.",
+            estilos["cuerpo"]))
+    else:
+        el.append(Paragraph(
+            f"La empresa <b>{datos_empresa.get('nombre','')}</b>, identificada con NIT "
+            f"<b>{datos_empresa.get('nit','')}</b>, certifica que "
+            f"<b>{empleado.get('Nombre','')}</b>, identificado(a) con cédula No. "
+            f"<b>{empleado.get('Documento','')}</b>, labora en la compañía desde el "
+            f"<b>{fi}</b>{contrato_t} desempeñando el cargo de "
+            f"<b>{empleado.get('Cargo','')}</b>, con un salario mensual de "
+            f"<b>{_fmt(empleado.get('Salario',0))}</b>.{texto_var}",
+            estilos["cuerpo"]))
     el.append(Paragraph(
         f"Se expide la presente certificación a solicitud del interesado(a), "
         f"el día <b>{fecha_expedicion}</b>, para los fines que estime pertinentes.",
@@ -731,18 +747,34 @@ def generar_certificado_sin_salario(empleado: dict, datos_empresa: dict,
     el.append(Paragraph("CERTIFICACIÓN LABORAL", estilos["titulo"]))
 
     fi   = fmt_fecha(empleado.get("Fecha ingreso",""))
+    fr   = fmt_fecha(empleado.get("Fecha retiro","") or empleado.get("fecha_retiro",""))
     tipo = empleado.get("Tipo contrato","")
     contrato_t = f", bajo contrato {tipo.lower()}," if tipo else ","
     fecha_expedicion = fecha_hoy_larga()
 
-    el.append(Paragraph(
-        f"La empresa <b>{datos_empresa.get('nombre','')}</b>, identificada con NIT "
-        f"<b>{datos_empresa.get('nit','')}</b>, certifica que "
-        f"<b>{empleado.get('Nombre','')}</b>, identificado(a) con cédula No. "
-        f"<b>{empleado.get('Documento','')}</b>, labora en la compañía desde el "
-        f"<b>{fi}</b>{contrato_t} desempeñando el cargo de "
-        f"<b>{empleado.get('Cargo','')}</b>.",
-        estilos["cuerpo"]))
+    # Texto adaptativo según si el empleado sigue activo o ya se retiró
+    if fr:
+        # Contrato ya finalizado
+        texto_cert = (
+            f"La empresa <b>{datos_empresa.get('nombre','')}</b>, identificada con NIT "
+            f"<b>{datos_empresa.get('nit','')}</b>, certifica que "
+            f"<b>{empleado.get('Nombre','')}</b>, identificado(a) con cédula No. "
+            f"<b>{empleado.get('Documento','')}</b>, laboró en la compañía desde el "
+            f"<b>{fi}</b> hasta el <b>{fr}</b>{contrato_t} desempeñando el cargo de "
+            f"<b>{empleado.get('Cargo','')}</b>."
+        )
+    else:
+        # Empleado activo actualmente
+        texto_cert = (
+            f"La empresa <b>{datos_empresa.get('nombre','')}</b>, identificada con NIT "
+            f"<b>{datos_empresa.get('nit','')}</b>, certifica que "
+            f"<b>{empleado.get('Nombre','')}</b>, identificado(a) con cédula No. "
+            f"<b>{empleado.get('Documento','')}</b>, labora en la compañía desde el "
+            f"<b>{fi}</b>{contrato_t} desempeñando el cargo de "
+            f"<b>{empleado.get('Cargo','')}</b>."
+        )
+
+    el.append(Paragraph(texto_cert, estilos["cuerpo"]))
     el.append(Paragraph(
         f"Se expide la presente certificación a solicitud del interesado(a), "
         f"el día <b>{fecha_expedicion}</b>, para los fines que estime pertinentes.",
