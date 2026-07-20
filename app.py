@@ -1435,3 +1435,53 @@ elif pagina == "🛡️  Admin" and u.get("es_admin"):
                     key=f"plan_{usr['email']}")
                 if st.button("Guardar plan", key=f"gp_{usr['email']}"):
                     admin_cambiar_plan(usr["email"], nuevo_plan); st.rerun()
+
+    # ── Panel de LOGS del sistema ─────────────────────────────────────
+    st.divider()
+    st.markdown("### 🩺 Diagnóstico del sistema (logs)")
+
+    from utils.logs import ver_logs, stats_logs, limpiar_logs
+    stats_l = stats_logs()
+
+    cl1, cl2, cl3, cl4 = st.columns(4)
+    cl1.metric("📊 Logs totales", stats_l["total"])
+    cl2.metric("✅ Info", stats_l["por_nivel"].get("info", 0))
+    cl3.metric("⚠️ Advertencias", stats_l["por_nivel"].get("warn", 0))
+    cl4.metric("❌ Errores", stats_l["por_nivel"].get("error", 0))
+
+    # Filtros
+    fl1, fl2, fl3 = st.columns([2, 2, 1])
+    with fl1:
+        nivel_filtro = st.selectbox("Nivel",
+            ["Todos", "error", "warn", "info", "debug"], key="log_nivel")
+    with fl2:
+        evento_filtro = st.text_input("Filtrar evento (ej: liquidacion)",
+            key="log_evento")
+    with fl3:
+        limite_filtro = st.number_input("Ver últimos",
+            min_value=10, max_value=500, value=50, step=10, key="log_limite")
+
+    if st.button("🗑️ Limpiar todos los logs", key="btn_limpiar_logs"):
+        limpiar_logs()
+        st.success("Logs eliminados")
+        st.rerun()
+
+    logs = ver_logs(
+        limite=limite_filtro,
+        nivel=nivel_filtro if nivel_filtro != "Todos" else None,
+        evento_contiene=evento_filtro.strip() or None,
+    )
+
+    if not logs:
+        st.info("No hay logs que coincidan con los filtros.")
+    else:
+        for log in logs:
+            nivel_icono = {
+                "error": "❌", "warn": "⚠️",
+                "info": "✅", "debug": "🔍"
+            }.get(log.get("nivel","?"), "•")
+            ts = log.get("ts","")[:19].replace("T"," ")
+            evento = log.get("evento","?")
+            with st.expander(f"{nivel_icono} `{ts}` · **{evento}**"):
+                st.json({k: v for k, v in log.items()
+                         if k not in ("ts","nivel","evento")})

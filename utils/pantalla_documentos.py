@@ -695,9 +695,22 @@ def _ejecutar_generacion_unificada(
 
             elif tipo_doc == "liquidacion_prestaciones":
                 import pandas as pd
+                from utils.logs import log_info, log_error, log_debug, log_warn
                 fc = conf.get("fecha_corte", date.today())
                 motivo_usado = conf.get("motivo_retiro", "renuncia")
                 dias_pend = int(conf.get("dias_pendientes", 0) or 0)
+
+                # Log completo del input recibido — cero especulación
+                log_info("liquidacion.input",
+                    empleado=nom, documento=doc_e,
+                    motivo=motivo_usado,
+                    fecha_corte=str(fc),
+                    dias_pendientes=dias_pend,
+                    tipo_contrato=emp.get("tipo_contrato","Indefinido"),
+                    salario=conf.get("salario_base", float(emp.get("salario",0))),
+                    fecha_ingreso=emp.get("fecha_ingreso",""),
+                    keys_conf=list(conf.keys()),
+                )
 
                 # ✅ Mensaje diagnóstico visible: muestra qué motivo se está usando
                 st.info(
@@ -715,12 +728,30 @@ def _ejecutar_generacion_unificada(
                     "Cuenta bancaria": emp.get("cuenta_bancaria",""),
                 })
                 fc_dt = datetime(fc.year, fc.month, fc.day)
-                res = calcular_liquidacion_fila(fila, fc_dt,
-                    motivo_retiro=motivo_usado,
-                    dias_pendientes_fijo=dias_pend)
+
+                try:
+                    res = calcular_liquidacion_fila(fila, fc_dt,
+                        motivo_retiro=motivo_usado,
+                        dias_pendientes_fijo=dias_pend)
+                except Exception as e:
+                    log_error("liquidacion.calculo.fallo",
+                        empleado=nom, error=str(e), motivo=motivo_usado)
+                    st.error(f"❌ Error al calcular liquidación: {e}")
+                    barra.progress((idx+1)/len(carrito), text=f"Error en {nom}")
+                    continue
 
                 # ✅ Verificar el cálculo antes de generar PDF
                 indem_calc = res.get("Indemnizacion (Art. 64 CST)", 0)
+                log_info("liquidacion.calculado",
+                    empleado=nom,
+                    motivo_recibido=motivo_usado,
+                    motivo_registrado=res.get("Motivo retiro",""),
+                    indem_calc=indem_calc,
+                    genera_indem=res.get("Genera indemnizacion", False),
+                    detalle=res.get("Indemnizacion detalle",""),
+                    total=res.get("TOTAL LIQUIDACION ESTIMADA", 0),
+                )
+
                 if indem_calc > 0:
                     st.success(f"✅ Indemnización calculada: **${indem_calc:,.0f}** COP".replace(",","."))
                 elif motivo_usado == "despido_sin_justa_causa":
@@ -728,10 +759,22 @@ def _ejecutar_generacion_unificada(
                         f"⚠️ Motivo '{motivo_usado}' pero indemnización = $0. "
                         f"Detalle: {res.get('Indemnizacion detalle','')}"
                     )
+                    log_warn("liquidacion.indemnizacion.cero_inesperada",
+                        empleado=nom, motivo=motivo_usado,
+                        detalle=res.get("Indemnizacion detalle",""),
+                        dias_pend=dias_pend)
 
                 ruta = str(SALIDAS / f"Liquidacion_{nb}.pdf")
-                generar_liquidacion(res, datos_liq, ruta, disenio,
-                    usar_mda, membrete, True, usar_logo)
+                try:
+                    generar_liquidacion(res, datos_liq, ruta, disenio,
+                        usar_mda, membrete, True, usar_logo)
+                    log_info("liquidacion.pdf.ok", empleado=nom, ruta=ruta)
+                except Exception as e:
+                    log_error("liquidacion.pdf.fallo",
+                        empleado=nom, error=str(e))
+                    st.error(f"❌ Error generando PDF: {e}")
+                    barra.progress((idx+1)/len(carrito), text=f"Error PDF en {nom}")
+                    continue
 
                 # ── AUTO-UPDATE: guardar fecha de retiro y marcar como retirado ──
                 from utils.empleados_db import empleado_guardar
