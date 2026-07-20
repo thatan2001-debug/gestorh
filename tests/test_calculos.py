@@ -221,6 +221,46 @@ def test_liquidacion_fechas_incoherentes():
         assert "anterior" in str(e).lower() or "fecha" in str(e).lower()
 
 
+def test_motivo_se_preserva_en_resultado():
+    """
+    El motivo enviado debe aparecer en el campo 'Motivo retiro' del resultado.
+    Este test protege el bug donde el PDF decía 'Retiro Voluntario' con cualquier motivo.
+    """
+    fila = _fila_test()
+    fc = datetime(2026, 7, 15)
+
+    r = calcular_liquidacion_fila(fila, fc, motivo_retiro="despido_sin_justa_causa")
+    motivo_guardado = r.get("Motivo retiro", "")
+    assert motivo_guardado == "despido_sin_justa_causa", \
+        f"El motivo debe preservarse. Enviado: 'despido_sin_justa_causa', " \
+        f"guardado: '{motivo_guardado}'"
+
+    # Verificar que _causa_retiro lo mapea al texto correcto
+    from utils.plantillas_disenio import _causa_retiro
+    texto = _causa_retiro(motivo_guardado)
+    assert "Sin Justa Causa" in texto, \
+        f"El texto debe reflejar 'Sin Justa Causa', dio: '{texto}'"
+
+
+def test_motivo_mapeo_todos_los_casos():
+    """Cada motivo debe mapear a un texto legible correcto en el PDF."""
+    from utils.plantillas_disenio import _causa_retiro
+
+    casos = {
+        "renuncia":                "Retiro Voluntario",
+        "con_justa_causa":         "Despido con Justa Causa (Art. 62 CST)",
+        "despido_sin_justa_causa": "Despido Sin Justa Causa (Art. 64 CST)",
+        "mutuo_acuerdo":           "Mutuo Acuerdo",
+        "vencimiento_contrato":    "Vencimiento de Contrato",
+        "obra_terminada":          "Finalización de Obra o Labor",
+        "jubilacion":              "Jubilación",
+    }
+    for motivo, esperado in casos.items():
+        resultado = _causa_retiro(motivo)
+        assert resultado == esperado, \
+            f"Motivo '{motivo}': esperado '{esperado}', dio '{resultado}'"
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # EJECUCIÓN
 # ══════════════════════════════════════════════════════════════════════════════

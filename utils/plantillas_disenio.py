@@ -73,9 +73,21 @@ def _fmt(valor):
 
 
 def _causa_retiro(motivo: str) -> str:
-    return {"renuncia":"Retiro Voluntario","despido_sin_justa_causa":"Despido Sin Justa Causa",
-            "mutuo_acuerdo":"Mutuo Acuerdo","vencimiento_contrato":"Vencimiento de Contrato"
-            }.get(str(motivo).lower(), motivo.replace("_"," ").title())
+    """Convierte el código de motivo a texto legible para el PDF."""
+    m = str(motivo).strip().lower()
+    return {
+        "renuncia":                 "Retiro Voluntario",
+        "renuncia_voluntaria":      "Retiro Voluntario",
+        "con_justa_causa":          "Despido con Justa Causa (Art. 62 CST)",
+        "despido_sin_justa_causa":  "Despido Sin Justa Causa (Art. 64 CST)",
+        "sin_justa_causa":          "Despido Sin Justa Causa (Art. 64 CST)",
+        "mutuo_acuerdo":            "Mutuo Acuerdo",
+        "vencimiento_contrato":     "Vencimiento de Contrato",
+        "vencimiento":              "Vencimiento de Contrato",
+        "obra_terminada":           "Finalización de Obra o Labor",
+        "periodo_prueba":           "Terminación en Período de Prueba",
+        "jubilacion":               "Jubilación",
+    }.get(m, m.replace("_", " ").title())
 
 
 def _estilos_para(paleta: dict) -> dict:

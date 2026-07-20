@@ -328,7 +328,7 @@ def calcular_liquidacion_fila(
         "Subtotal prestaciones": subtotal_prestaciones,
         "TOTAL LIQUIDACION ESTIMADA": total,
         # Meta
-        "Motivo retiro": motivo_retiro,
+        "Motivo retiro": motivo_lower,  # ya normalizado (minúsculas, sin espacios)
         "Genera indemnizacion": genera_indem,
         "Referencia legal": "CST + Decretos 1469/2025 y 159/2026 — SMMLV $1.750.905",
     }

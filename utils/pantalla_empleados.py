@@ -134,11 +134,14 @@ def _tab_base(email: str):
                 **Ingreso:** {date_fmt(emp.get('fecha_ingreso',''))}
                 """)
             with c2:
+                ing_var_fmt = f"${ing_var:,.0f}".replace(",",".") if ing_var > 0 else "—"
+                correo_emp  = emp.get('correo','') or '—'
+                retiro_fmt  = date_fmt(emp.get('fecha_retiro','')) or 'Activo'
                 st.markdown(f"""
                 **Salario:** {salario_fmt}
-                **Var. mensual:** ${ing_var:,.0f}".replace(",",".")
-                **Correo:** {emp.get('correo','—')}
-                **Retiro:** {date_fmt(emp.get('fecha_retiro','')) or 'Activo'}
+                **Var. mensual:** {ing_var_fmt}
+                **Correo:** {correo_emp}
+                **Retiro:** {retiro_fmt}
                 """)
             with c3:
                 doc = emp.get("documento","")

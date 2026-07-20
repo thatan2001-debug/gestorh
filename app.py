@@ -410,64 +410,90 @@ with st.sidebar:
     # CSS para botones grandes tipo tarjeta con contraste
     st.markdown("""
     <style>
-    /* Botones del sidebar — texto visible siempre */
-    section[data-testid="stSidebar"] div.stButton > button {
-        text-align: left !important;
-        justify-content: flex-start !important;
-        font-size: 0.98rem !important;
-        padding: 14px 18px !important;
+    /* Sidebar background */
+    section[data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #1B3F6E 0%, #0F2A4F 100%) !important;
+    }
+
+    /* Contenedor de botones */
+    section[data-testid="stSidebar"] div.stButton {
         margin-bottom: 6px !important;
-        border-radius: 10px !important;
+    }
+
+    /* Botones del sidebar — reglas para TODAS las capas anidadas */
+    section[data-testid="stSidebar"] div.stButton button,
+    section[data-testid="stSidebar"] div.stButton button p,
+    section[data-testid="stSidebar"] div.stButton button div,
+    section[data-testid="stSidebar"] div.stButton button span {
+        text-align: left !important;
+        font-size: 0.98rem !important;
         font-weight: 600 !important;
+    }
+
+    section[data-testid="stSidebar"] div.stButton > button {
+        padding: 14px 18px !important;
+        border-radius: 10px !important;
         transition: all 0.2s ease !important;
         width: 100% !important;
+        justify-content: flex-start !important;
+        display: flex !important;
     }
-    /* Botón INACTIVO: fondo BLANCO, texto AZUL OSCURO (alto contraste) */
-    section[data-testid="stSidebar"] div.stButton > button[kind="secondary"],
-    section[data-testid="stSidebar"] div.stButton > button:not([kind="primary"]) {
-        background: #FFFFFF !important;
-        color: #1B3F6E !important;
+
+    /* Botón INACTIVO: fondo BLANCO, texto AZUL OSCURO */
+    section[data-testid="stSidebar"] div.stButton > button[kind="secondary"] {
+        background-color: #FFFFFF !important;
         border: 2px solid #E5E7EB !important;
     }
-    section[data-testid="stSidebar"] div.stButton > button[kind="secondary"] *,
-    section[data-testid="stSidebar"] div.stButton > button:not([kind="primary"]) * {
+    section[data-testid="stSidebar"] div.stButton > button[kind="secondary"] p,
+    section[data-testid="stSidebar"] div.stButton > button[kind="secondary"] span,
+    section[data-testid="stSidebar"] div.stButton > button[kind="secondary"] div {
         color: #1B3F6E !important;
     }
-    section[data-testid="stSidebar"] div.stButton > button[kind="secondary"]:hover,
-    section[data-testid="stSidebar"] div.stButton > button:not([kind="primary"]):hover {
-        background: #EFF6FF !important;
+    section[data-testid="stSidebar"] div.stButton > button[kind="secondary"]:hover {
+        background-color: #EFF6FF !important;
         border-color: #2D6BE4 !important;
         transform: translateX(2px) !important;
     }
+    section[data-testid="stSidebar"] div.stButton > button[kind="secondary"]:hover p,
+    section[data-testid="stSidebar"] div.stButton > button[kind="secondary"]:hover span,
+    section[data-testid="stSidebar"] div.stButton > button[kind="secondary"]:hover div {
+        color: #1B3F6E !important;
+    }
+
     /* Botón ACTIVO (primary): fondo AZUL DEGRADADO, texto BLANCO */
     section[data-testid="stSidebar"] div.stButton > button[kind="primary"] {
         background: linear-gradient(135deg, #2D6BE4, #1B3F6E) !important;
-        color: #FFFFFF !important;
         border: none !important;
-        box-shadow: 0 4px 12px rgba(45, 107, 228, 0.4) !important;
+        box-shadow: 0 4px 12px rgba(45, 107, 228, 0.5) !important;
     }
-    section[data-testid="stSidebar"] div.stButton > button[kind="primary"] * {
+    section[data-testid="stSidebar"] div.stButton > button[kind="primary"] p,
+    section[data-testid="stSidebar"] div.stButton > button[kind="primary"] span,
+    section[data-testid="stSidebar"] div.stButton > button[kind="primary"] div {
         color: #FFFFFF !important;
     }
 
-    /* Pestañas (st.tabs) con mejor visual */
+    /* Cabecera del sidebar (nombre, hola usuario) — que sean blancos */
+    section[data-testid="stSidebar"] h1,
+    section[data-testid="stSidebar"] h2,
+    section[data-testid="stSidebar"] h3,
+    section[data-testid="stSidebar"] p,
+    section[data-testid="stSidebar"] span:not(button span) {
+        color: #FFFFFF !important;
+    }
+
+    /* Pestañas (st.tabs) */
     div[data-testid="stTabs"] button[role="tab"] {
         font-size: 1rem !important;
         font-weight: 600 !important;
         padding: 12px 24px !important;
         border-radius: 8px 8px 0 0 !important;
-        transition: all 0.2s ease !important;
     }
     div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
         background: linear-gradient(135deg, #2D6BE4, #1B3F6E) !important;
         color: #FFFFFF !important;
     }
-    div[data-testid="stTabs"] button[role="tab"]:not([aria-selected="true"]) {
-        color: #6B7280 !important;
-    }
-    div[data-testid="stTabs"] button[role="tab"]:not([aria-selected="true"]):hover {
-        background: #EFF6FF !important;
-        color: #1B3F6E !important;
+    div[data-testid="stTabs"] button[role="tab"][aria-selected="true"] p {
+        color: #FFFFFF !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -1068,8 +1094,33 @@ elif pagina == "📄  Documentos":
     st.markdown("# Generar documentos")
     if not empresa_ok:
         st.error("⚠️ Configura primero los datos de tu empresa."); st.stop()
+
+    # Cargar automáticamente empleados desde BD si no están en sesión
     if st.session_state.df_empleados is None:
-        st.error("⚠️ Carga primero la base de empleados."); st.stop()
+        from utils.empleados_db import empleados_listar
+        emps_bd = empleados_listar(u["email"])
+        if emps_bd:
+            import pandas as pd
+            df_from_bd = pd.DataFrame([{
+                "Nombre":                     e.get("nombre",""),
+                "Documento":                  e.get("documento",""),
+                "Cargo":                      e.get("cargo",""),
+                "Salario":                    float(e.get("salario", 0) or 0),
+                "Fecha ingreso":              e.get("fecha_ingreso",""),
+                "Fecha retiro":               e.get("fecha_retiro",""),
+                "Tipo contrato":              e.get("tipo_contrato","Indefinido"),
+                "Tipo salario":               e.get("tipo_salario","fijo"),
+                "Ingreso promedio variable":  float(e.get("ingreso_promedio_variable", 0) or 0),
+                "Cuenta bancaria":            e.get("cuenta_bancaria",""),
+                "Correo":                     e.get("correo",""),
+            } for e in emps_bd if e.get("activo", True)])
+            st.session_state.df_empleados = df_from_bd
+        else:
+            st.error("⚠️ No tienes empleados registrados. Ve a la sección **👥 Empleados** para agregarlos.")
+            if st.button("→ Ir a Empleados", type="primary"):
+                st.session_state["ir_a"] = "👥  Empleados"
+                st.rerun()
+            st.stop()
 
     df            = st.session_state.df_empleados
     de            = st.session_state.datos_empresa
