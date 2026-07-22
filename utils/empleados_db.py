@@ -79,41 +79,103 @@ def empleado_guardar(email: str, datos: dict) -> tuple[bool, str]:
     if not nombre: return False, "Nombre obligatorio."
 
     payload = {
+        # ── Vínculo con empresa ───────────────────────────────────
         "email_empresa":              email,
+        # ── Documento ─────────────────────────────────────────────
+        "tipo_documento":             datos.get("tipo_documento", "CC"),
         "documento":                  doc,
+        # ── Datos básicos ─────────────────────────────────────────
         "nombre":                     nombre,
         "cargo":                      str(datos.get("cargo","")).strip(),
         "salario":                    float(datos.get("salario", 0) or 0),
+        "auxilio_transporte":         float(datos.get("auxilio_transporte", 0) or 0),
         "fecha_ingreso":              str(datos.get("fecha_ingreso","")).strip(),
         "fecha_retiro":               str(datos.get("fecha_retiro","")).strip() or None,
+        "fecha_vencimiento_contrato": str(datos.get("fecha_vencimiento_contrato","")).strip() or None,
         "tipo_contrato":              datos.get("tipo_contrato","Indefinido"),
-        "correo":                     datos.get("correo",""),
-        "cuenta_bancaria":            datos.get("cuenta_bancaria",""),
         "tipo_salario":               datos.get("tipo_salario","fijo"),
         "salario_variable":           float(datos.get("salario_variable", 0) or 0),
         "ingreso_promedio_variable":  float(datos.get("ingreso_promedio_variable", 0) or 0),
+        # ── Datos personales ──────────────────────────────────────
+        "fecha_nacimiento":           str(datos.get("fecha_nacimiento","")).strip() or None,
+        "direccion":                  str(datos.get("direccion","")).strip() or None,
+        "ciudad":                     str(datos.get("ciudad","")).strip() or None,
+        "telefono":                   str(datos.get("telefono","")).strip() or None,
+        "correo":                     str(datos.get("correo","")).strip() or None,
+        "correo_personal":            str(datos.get("correo_personal","")).strip() or None,
+        "genero":                     str(datos.get("genero","")).strip() or None,
+        "estado_civil":               str(datos.get("estado_civil","")).strip() or None,
+        # ── Seguridad social ──────────────────────────────────────
+        "eps":                        str(datos.get("eps","")).strip() or None,
+        "arl":                        str(datos.get("arl","")).strip() or None,
+        "pension":                    str(datos.get("pension","")).strip() or None,
+        "caja_compensacion":          str(datos.get("caja_compensacion","")).strip() or None,
+        "fondo_cesantias":            str(datos.get("fondo_cesantias","")).strip() or None,
+        # ── Datos laborales adicionales ───────────────────────────
+        "area":                       str(datos.get("area","")).strip() or None,
+        "sede":                       str(datos.get("sede","")).strip() or None,
+        "jefe_inmediato":             str(datos.get("jefe_inmediato","")).strip() or None,
+        "centro_costo":               str(datos.get("centro_costo","")).strip() or None,
+        "modalidad":                  datos.get("modalidad", "presencial"),
+        "jornada":                    datos.get("jornada", "completa"),
+        "horario":                    str(datos.get("horario","")).strip() or None,
+        # ── Datos bancarios ───────────────────────────────────────
+        "entidad_bancaria":           str(datos.get("entidad_bancaria","")).strip() or None,
+        "tipo_cuenta":                str(datos.get("tipo_cuenta","")).strip() or None,
+        "cuenta_bancaria":            str(datos.get("cuenta_bancaria","")).strip() or None,
+        # ── Contacto de emergencia ────────────────────────────────
+        "emergencia_nombre":          str(datos.get("emergencia_nombre","")).strip() or None,
+        "emergencia_parentesco":      str(datos.get("emergencia_parentesco","")).strip() or None,
+        "emergencia_telefono":        str(datos.get("emergencia_telefono","")).strip() or None,
+        # ── Estado ────────────────────────────────────────────────
         "activo":                     datos.get("activo", True),
         "updated_at":                 datetime.now().isoformat(),
     }
+
+    # Filtrar campos None para no sobreescribir valores existentes con NULL
+    # (importante en updates parciales)
+    payload_limpio = {k: v for k, v in payload.items()
+                       if v is not None or k in ("fecha_retiro", "fecha_vencimiento_contrato")}
 
     existe = empleado_obtener(email, doc) is not None
     sb = _db()
     if sb:
         try:
-            sb.table("empleados").upsert(payload,
+            sb.table("empleados").upsert(payload_limpio,
                 on_conflict="email_empresa,documento").execute()
             accion = "actualizado" if existe else "creado"
             return True, f"Empleado {nombre} {accion}."
         except Exception as e:
+            # Si falla por columna faltante, reintentar con solo campos básicos
+            error_str = str(e).lower()
+            if "column" in error_str and ("does not exist" in error_str or "no existe" in error_str):
+                # Fallback: guardar solo con campos que sabemos existen
+                campos_seguros = {
+                    "email_empresa", "documento", "nombre", "cargo", "salario",
+                    "fecha_ingreso", "fecha_retiro", "tipo_contrato", "correo",
+                    "telefono", "cuenta_bancaria", "tipo_salario", "salario_variable",
+                    "ingreso_promedio_variable", "eps", "pension", "arl",
+                    "activo", "updated_at",
+                }
+                payload_seguro = {k: v for k, v in payload_limpio.items()
+                                   if k in campos_seguros}
+                try:
+                    sb.table("empleados").upsert(payload_seguro,
+                        on_conflict="email_empresa,documento").execute()
+                    accion = "actualizado" if existe else "creado"
+                    return True, (f"Empleado {nombre} {accion} (campos ampliados no guardados — "
+                                   f"ejecuta migración 006_ficha_empleado_ampliada.sql en Supabase)")
+                except Exception as e2:
+                    return False, f"Error: {e2}"
             return False, f"Error: {e}"
     else:
         emp = _json_load(email)
         for i, e in enumerate(emp):
             if e.get("documento") == doc:
-                emp[i] = payload
+                emp[i] = payload_limpio
                 _json_save(email, emp)
                 return True, f"{nombre} actualizado."
-        emp.append(payload)
+        emp.append(payload_limpio)
         _json_save(email, emp)
         return True, f"{nombre} creado."
 

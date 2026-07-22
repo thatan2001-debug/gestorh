@@ -373,76 +373,324 @@ def _tab_nuevo_empleado(email: str):
             st.session_state.pop("emp_editar", None)
             st.rerun()
 
+    # Importar constantes para dropdowns
+    from services.validaciones_empleado import (
+        TIPOS_DOCUMENTO, ESTADOS_CIVILES, GENEROS, MODALIDADES, JORNADAS,
+        EPS_COMUNES, FONDOS_PENSION, FONDOS_CESANTIAS, ARL_COMUNES,
+        CAJAS_COMPENSACION,
+        validar_empleado,
+    )
+
+    def _get(campo, default=""):
+        """Helper para obtener valor del empleado a editar o default."""
+        if not emp_editar:
+            return default
+        return emp_editar.get(campo, default) or default
+
+    def _get_float(campo, default=0.0):
+        if not emp_editar:
+            return default
+        try:
+            return float(emp_editar.get(campo, default) or default)
+        except (ValueError, TypeError):
+            return default
+
     with st.form(f"form_emp_{modo}"):
-        c1, c2 = st.columns(2)
-        with c1:
-            doc    = st.text_input("Número de documento *",
-                value=emp_editar.get("documento","") if emp_editar else "",
-                placeholder="Cédula, NIT, pasaporte...")
-            nombre = st.text_input("Nombre completo *",
-                value=emp_editar.get("nombre","") if emp_editar else "")
-            cargo  = st.text_input("Cargo *",
-                value=emp_editar.get("cargo","") if emp_editar else "")
-            contrato = st.selectbox("Tipo de contrato",
-                TIPOS_CONTRATO,
-                index=TIPOS_CONTRATO.index(emp_editar.get("tipo_contrato","Indefinido"))
-                      if emp_editar and emp_editar.get("tipo_contrato") in TIPOS_CONTRATO
-                      else 0)
-        with c2:
-            salario  = st.number_input("Salario base ($) *",
-                value=float(emp_editar.get("salario",0)) if emp_editar else 0.0,
-                min_value=0.0, step=50000.0)
-            fi = st.text_input("Fecha de ingreso (dd/mm/aaaa) *",
-                value=emp_editar.get("fecha_ingreso","") if emp_editar else "",
-                placeholder="01/02/2024")
-            fr = st.text_input("Fecha de retiro (dd/mm/aaaa)",
-                value=emp_editar.get("fecha_retiro","") if emp_editar else "",
-                placeholder="Dejar vacío si sigue activo")
-            correo_emp = st.text_input("Correo del empleado",
-                value=emp_editar.get("correo","") if emp_editar else "",
-                placeholder="empleado@empresa.com")
+        # Pestañas dentro del formulario para no abrumar
+        tab_basico, tab_personal, tab_seg_social, tab_laboral, tab_emergencia = st.tabs([
+            "📋 Datos básicos",
+            "👤 Datos personales",
+            "🏥 Seguridad social",
+            "💼 Laborales",
+            "🆘 Emergencia",
+        ])
 
-        st.markdown("**Salario variable:**")
-        cv1, cv2 = st.columns(2)
-        with cv1:
-            ing_var_orig = float(emp_editar.get("ingreso_promedio_variable",0) or 0) if emp_editar else 0.0
-            tiene_variable = st.checkbox("Este empleado tiene ingresos variables",
-                value=ing_var_orig > 0)
-        with cv2:
-            if tiene_variable:
-                ing_var = st.number_input("Promedio mensual variable ($)",
-                    value=ing_var_orig, min_value=0.0, step=50000.0)
-            else:
-                ing_var = 0.0
+        # ─── TAB: DATOS BÁSICOS ────────────────────────────────────────
+        with tab_basico:
+            c1, c2 = st.columns(2)
+            with c1:
+                tipo_doc = st.selectbox(
+                    "Tipo de documento *",
+                    list(TIPOS_DOCUMENTO.keys()),
+                    format_func=lambda x: TIPOS_DOCUMENTO[x],
+                    index=list(TIPOS_DOCUMENTO.keys()).index(_get("tipo_documento", "CC"))
+                          if _get("tipo_documento", "CC") in TIPOS_DOCUMENTO else 0,
+                )
+                doc = st.text_input("Número de documento *",
+                    value=_get("documento"),
+                    placeholder="1234567890")
+                nombre = st.text_input("Nombre completo *",
+                    value=_get("nombre"),
+                    placeholder="Juan Pérez García")
+                cargo  = st.text_input("Cargo *",
+                    value=_get("cargo"),
+                    placeholder="Analista de sistemas")
 
-        cuenta = st.text_input("Cuenta bancaria (para liquidaciones)",
-            value=emp_editar.get("cuenta_bancaria","") if emp_editar else "",
-            placeholder="Bancolombia Ahorros #123456")
+            with c2:
+                contrato = st.selectbox("Tipo de contrato *",
+                    TIPOS_CONTRATO,
+                    index=TIPOS_CONTRATO.index(_get("tipo_contrato", "Indefinido"))
+                          if _get("tipo_contrato") in TIPOS_CONTRATO else 0)
+                salario  = st.number_input("Salario base ($) *",
+                    value=_get_float("salario"),
+                    min_value=0.0, step=50000.0)
+                aux_transporte = st.number_input(
+                    "Auxilio de transporte mensual ($)",
+                    value=_get_float("auxilio_transporte", 0.0),
+                    min_value=0.0, step=1000.0,
+                    help="Solo si el salario < 2 SMMLV. Se paga aparte del salario."
+                )
+                fi = st.text_input("Fecha de ingreso (dd/mm/aaaa) *",
+                    value=_get("fecha_ingreso"),
+                    placeholder="01/02/2024")
 
+            c3, c4 = st.columns(2)
+            with c3:
+                fr = st.text_input("Fecha de retiro (dd/mm/aaaa)",
+                    value=_get("fecha_retiro"),
+                    placeholder="Dejar vacío si sigue activo")
+            with c4:
+                # Fecha vencimiento contrato (solo si es fijo/obra)
+                fvc = st.text_input(
+                    "Vencimiento del contrato (para fijo/obra)",
+                    value=_get("fecha_vencimiento_contrato"),
+                    placeholder="dd/mm/aaaa"
+                )
+
+            # Salario variable
+            st.markdown("**Ingresos variables (comisiones, bonos):**")
+            cv1, cv2 = st.columns(2)
+            with cv1:
+                ing_var_orig = _get_float("ingreso_promedio_variable")
+                tiene_variable = st.checkbox("Este empleado tiene ingresos variables",
+                    value=ing_var_orig > 0)
+            with cv2:
+                if tiene_variable:
+                    ing_var = st.number_input("Promedio mensual variable ($)",
+                        value=ing_var_orig, min_value=0.0, step=50000.0)
+                else:
+                    ing_var = 0.0
+
+        # ─── TAB: DATOS PERSONALES ─────────────────────────────────────
+        with tab_personal:
+            c1, c2 = st.columns(2)
+            with c1:
+                fecha_nac = st.text_input("Fecha de nacimiento (dd/mm/aaaa)",
+                    value=_get("fecha_nacimiento"),
+                    placeholder="15/03/1990")
+                direccion = st.text_input("Dirección",
+                    value=_get("direccion"),
+                    placeholder="Calle 10 # 20-30")
+                ciudad_emp = st.text_input("Ciudad",
+                    value=_get("ciudad"),
+                    placeholder="Medellín")
+            with c2:
+                telefono_emp = st.text_input("Teléfono / Celular",
+                    value=_get("telefono"),
+                    placeholder="3001234567")
+                correo_emp = st.text_input("Correo corporativo",
+                    value=_get("correo"),
+                    placeholder="empleado@empresa.com")
+                correo_personal = st.text_input("Correo personal",
+                    value=_get("correo_personal"),
+                    placeholder="personal@gmail.com")
+
+            c3, c4 = st.columns(2)
+            with c3:
+                genero_actual = _get("genero", "")
+                genero = st.selectbox("Género",
+                    [""] + GENEROS,
+                    index=(GENEROS.index(genero_actual) + 1)
+                          if genero_actual in GENEROS else 0)
+            with c4:
+                estado_civil_act = _get("estado_civil", "")
+                estado_civil = st.selectbox("Estado civil",
+                    [""] + ESTADOS_CIVILES,
+                    index=(ESTADOS_CIVILES.index(estado_civil_act) + 1)
+                          if estado_civil_act in ESTADOS_CIVILES else 0)
+
+        # ─── TAB: SEGURIDAD SOCIAL ─────────────────────────────────────
+        with tab_seg_social:
+            st.caption("Datos de afiliación al sistema de seguridad social")
+            c1, c2 = st.columns(2)
+            with c1:
+                eps_actual = _get("eps", "")
+                eps_opciones = [""] + EPS_COMUNES
+                eps = st.selectbox("EPS",
+                    eps_opciones,
+                    index=eps_opciones.index(eps_actual) if eps_actual in eps_opciones else 0)
+                if eps == "Otro":
+                    eps = st.text_input("Nombre de la EPS", value=eps_actual if eps_actual not in EPS_COMUNES else "")
+
+                arl_actual = _get("arl", "")
+                arl_opciones = [""] + ARL_COMUNES
+                arl = st.selectbox("ARL",
+                    arl_opciones,
+                    index=arl_opciones.index(arl_actual) if arl_actual in arl_opciones else 0)
+                if arl == "Otro":
+                    arl = st.text_input("Nombre de la ARL", value=arl_actual if arl_actual not in ARL_COMUNES else "")
+
+            with c2:
+                pension_actual = _get("pension", "")
+                pension_opciones = [""] + FONDOS_PENSION
+                pension = st.selectbox("Fondo de pensiones",
+                    pension_opciones,
+                    index=pension_opciones.index(pension_actual) if pension_actual in pension_opciones else 0)
+                if pension == "Otro":
+                    pension = st.text_input("Nombre del fondo", value=pension_actual if pension_actual not in FONDOS_PENSION else "")
+
+                caja_actual = _get("caja_compensacion", "")
+                caja_opciones = [""] + CAJAS_COMPENSACION
+                caja = st.selectbox("Caja de compensación",
+                    caja_opciones,
+                    index=caja_opciones.index(caja_actual) if caja_actual in caja_opciones else 0)
+                if caja == "Otro":
+                    caja = st.text_input("Nombre de la caja", value=caja_actual if caja_actual not in CAJAS_COMPENSACION else "")
+
+            cesantias_actual = _get("fondo_cesantias", "")
+            cesantias_opciones = [""] + FONDOS_CESANTIAS
+            cesantias = st.selectbox("Fondo de cesantías",
+                cesantias_opciones,
+                index=cesantias_opciones.index(cesantias_actual) if cesantias_actual in cesantias_opciones else 0)
+            if cesantias == "Otro":
+                cesantias = st.text_input("Nombre del fondo de cesantías", value=cesantias_actual if cesantias_actual not in FONDOS_CESANTIAS else "")
+
+        # ─── TAB: DATOS LABORALES ADICIONALES ──────────────────────────
+        with tab_laboral:
+            c1, c2 = st.columns(2)
+            with c1:
+                area = st.text_input("Área / Departamento",
+                    value=_get("area"),
+                    placeholder="Administración")
+                sede = st.text_input("Sede",
+                    value=_get("sede"),
+                    placeholder="Sede Principal")
+                jefe = st.text_input("Jefe inmediato",
+                    value=_get("jefe_inmediato"),
+                    placeholder="Nombre del jefe")
+                centro_costo = st.text_input("Centro de costo",
+                    value=_get("centro_costo"),
+                    placeholder="CC-001")
+            with c2:
+                modalidad_actual = _get("modalidad", "presencial")
+                modalidad = st.selectbox("Modalidad",
+                    MODALIDADES,
+                    format_func=lambda x: x.capitalize(),
+                    index=MODALIDADES.index(modalidad_actual)
+                          if modalidad_actual in MODALIDADES else 0)
+                jornada_actual = _get("jornada", "completa")
+                jornada = st.selectbox("Jornada",
+                    JORNADAS,
+                    format_func=lambda x: {"completa":"Completa","media":"Media","por_horas":"Por horas"}[x],
+                    index=JORNADAS.index(jornada_actual)
+                          if jornada_actual in JORNADAS else 0)
+                horario = st.text_input("Horario",
+                    value=_get("horario"),
+                    placeholder="Lunes a viernes 8am-5pm")
+
+            st.markdown("**Cuenta bancaria (para pagos y liquidaciones):**")
+            c3, c4 = st.columns(2)
+            with c3:
+                banco = st.text_input("Entidad bancaria",
+                    value=_get("entidad_bancaria"),
+                    placeholder="Bancolombia")
+                tipo_cuenta = st.selectbox("Tipo de cuenta",
+                    ["", "Ahorros", "Corriente"],
+                    index={"": 0, "Ahorros": 1, "Corriente": 2}.get(_get("tipo_cuenta", ""), 0))
+            with c4:
+                cuenta = st.text_input("Número de cuenta",
+                    value=_get("cuenta_bancaria"),
+                    placeholder="1234567890")
+
+        # ─── TAB: CONTACTO DE EMERGENCIA ───────────────────────────────
+        with tab_emergencia:
+            st.caption("Persona a contactar en caso de emergencia laboral")
+            c1, c2 = st.columns(2)
+            with c1:
+                em_nombre = st.text_input("Nombre completo",
+                    value=_get("emergencia_nombre"),
+                    placeholder="María Pérez")
+                em_parentesco = st.text_input("Parentesco",
+                    value=_get("emergencia_parentesco"),
+                    placeholder="Esposa, hijo, padre...")
+            with c2:
+                em_telefono = st.text_input("Teléfono de contacto",
+                    value=_get("emergencia_telefono"),
+                    placeholder="3009876543")
+
+        # ─── BOTÓN GUARDAR ─────────────────────────────────────────────
+        st.divider()
         guardar = st.form_submit_button(
             f"{'💾 Guardar cambios' if emp_editar else '➕ Agregar empleado'}",
-            type="primary")
+            type="primary", use_container_width=True)
 
         if guardar:
-            errores_v = []
-            if not doc:    errores_v.append("Documento requerido")
-            if not nombre: errores_v.append("Nombre requerido")
-            if not cargo:  errores_v.append("Cargo requerido")
-            if salario <= 0: errores_v.append("Salario debe ser mayor a 0")
-            if not fi:     errores_v.append("Fecha de ingreso requerida")
+            # Ensamblar todos los datos
+            datos_emp = {
+                # Básicos
+                "tipo_documento":   tipo_doc,
+                "documento":        doc,
+                "nombre":           nombre,
+                "cargo":            cargo,
+                "salario":          salario,
+                "auxilio_transporte": aux_transporte,
+                "fecha_ingreso":    fi,
+                "fecha_retiro":     fr,
+                "fecha_vencimiento_contrato": fvc,
+                "tipo_contrato":    contrato,
+                "ingreso_promedio_variable": ing_var,
+                "tipo_salario":     "variable" if tiene_variable else "fijo",
+                # Personales
+                "fecha_nacimiento": fecha_nac,
+                "direccion":        direccion,
+                "ciudad":           ciudad_emp,
+                "telefono":         telefono_emp,
+                "correo":           correo_emp,
+                "correo_personal":  correo_personal,
+                "genero":           genero if genero else "",
+                "estado_civil":     estado_civil if estado_civil else "",
+                # Seguridad social
+                "eps":              eps if eps and eps != "Otro" else "",
+                "arl":              arl if arl and arl != "Otro" else "",
+                "pension":          pension if pension and pension != "Otro" else "",
+                "caja_compensacion":caja if caja and caja != "Otro" else "",
+                "fondo_cesantias":  cesantias if cesantias and cesantias != "Otro" else "",
+                # Laborales adicionales
+                "area":             area,
+                "sede":             sede,
+                "jefe_inmediato":   jefe,
+                "centro_costo":     centro_costo,
+                "modalidad":        modalidad,
+                "jornada":          jornada,
+                "horario":          horario,
+                # Bancario
+                "entidad_bancaria": banco,
+                "tipo_cuenta":      tipo_cuenta,
+                "cuenta_bancaria":  cuenta,
+                # Emergencia
+                "emergencia_nombre":     em_nombre,
+                "emergencia_parentesco": em_parentesco,
+                "emergencia_telefono":   em_telefono,
+                # Estado
+                "activo": True,
+            }
 
-            if errores_v:
-                for e in errores_v: st.error(e)
+            # Validar
+            ok_val, errores = validar_empleado(datos_emp)
+
+            # Separar errores reales de warnings
+            errores_reales = {k: v for k, v in errores.items() if not k.endswith("_warning")}
+            warnings_v = {k.replace("_warning", ""): v for k, v in errores.items() if k.endswith("_warning")}
+
+            if warnings_v:
+                for campo, w in warnings_v.items():
+                    st.warning(f"**{campo}:** {w}")
+
+            if errores_reales:
+                for campo, msg in errores_reales.items():
+                    st.error(f"**{campo}:** {msg}")
             else:
-                ok, msg = empleado_guardar(email, {
-                    "documento": doc, "nombre": nombre, "cargo": cargo,
-                    "salario": salario, "fecha_ingreso": fi,
-                    "fecha_retiro": fr, "tipo_contrato": contrato,
-                    "correo": correo_emp, "cuenta_bancaria": cuenta,
-                    "ingreso_promedio_variable": ing_var,
-                    "tipo_salario": "variable" if tiene_variable else "fijo",
-                    "activo": True,
-                })
+                ok, msg = empleado_guardar(email, datos_emp)
                 if ok:
                     st.success(f"✅ {msg}")
                     st.session_state.pop("emp_editar", None)
