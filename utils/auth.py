@@ -251,6 +251,16 @@ eliminar_usuario    = usuario_eliminar
 sumar_docs_usuario  = usuario_sumar_docs
 obtener_usuario     = usuario_obtener
 
+# ─── Aliases cortos (sin sufijo "_usuario") ───
+# Cubre variantes usadas por pages/admin.py y otros módulos legacy
+cambiar_plan   = usuario_cambiar_plan
+activar        = usuario_activar
+desactivar     = usuario_desactivar
+eliminar       = usuario_eliminar
+sumar_docs     = usuario_sumar_docs
+listar         = usuarios_listar
+listar_todos   = usuarios_listar
+
 
 # Re-exportar para compatibilidad con el resto de la app
 __all__ = [
@@ -262,4 +272,7 @@ __all__ = [
     "listar_usuarios", "activar_usuario", "desactivar_usuario",
     "cambiar_plan_usuario", "eliminar_usuario", "sumar_docs_usuario",
     "obtener_usuario",
+    # Aliases cortos
+    "cambiar_plan", "activar", "desactivar", "eliminar",
+    "sumar_docs", "listar", "listar_todos",
 ]
