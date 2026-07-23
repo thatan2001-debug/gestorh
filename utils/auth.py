@@ -236,10 +236,30 @@ def obtener_limite_plan(plan: str) -> dict:
     return {"max_docs": info["max_documentos"], "tiene_limite": info["limite"]}
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# ALIASES DE COMPATIBILIDAD HACIA ATRÁS
+# ═══════════════════════════════════════════════════════════════════════════
+# Antes de la refactorización S2.2 algunos módulos importaban con nombres
+# distintos (verbo primero). Se mantienen aquí como aliases para no romper
+# archivos que aún importen los nombres viejos (pages/admin.py, etc.).
+
+listar_usuarios     = usuarios_listar
+activar_usuario     = usuario_activar
+desactivar_usuario  = usuario_desactivar
+cambiar_plan_usuario = usuario_cambiar_plan
+eliminar_usuario    = usuario_eliminar
+sumar_docs_usuario  = usuario_sumar_docs
+obtener_usuario     = usuario_obtener
+
+
 # Re-exportar para compatibilidad con el resto de la app
 __all__ = [
     "login", "registrar", "cambiar_password", "obtener_limite_plan", "ADMIN_EMAIL",
     "usuario_activar", "usuario_desactivar", "usuario_cambiar_plan",
     "usuario_sumar_docs", "usuario_eliminar", "usuarios_listar",
     "empresa_guardar", "empresa_cargar", "empresa_onboarding_ok", "stats_admin",
+    # Aliases retrocompat
+    "listar_usuarios", "activar_usuario", "desactivar_usuario",
+    "cambiar_plan_usuario", "eliminar_usuario", "sumar_docs_usuario",
+    "obtener_usuario",
 ]
