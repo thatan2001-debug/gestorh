@@ -491,6 +491,233 @@ def _mostrar_config_global(tipo_doc: str, carrito: dict):
         for doc_e in carrito:
             carrito[doc_e]["config"]["observaciones"] = obs
 
+    # ── Cambio de horario ────────────────────────────────────────────────
+    elif tipo_doc == "cambio_horario":
+        c1, c2 = st.columns(2)
+        with c1:
+            h_actual = st.text_input("Horario actual",
+                placeholder="L-V 8:00 a.m. - 5:00 p.m.",
+                key="cfg_h_actual")
+            fecha_vig = st.date_input("Fecha de vigencia *",
+                value=date.today(), key="cfg_fecha_vig_horario")
+        with c2:
+            h_nuevo = st.text_input("Nuevo horario *",
+                placeholder="L-V 7:00 a.m. - 4:00 p.m.",
+                key="cfg_h_nuevo")
+        justif = st.text_area("Justificación (opcional)",
+            placeholder="Ej: Ajuste por cambio en horario de atención al cliente.",
+            key="cfg_justif_horario")
+        for doc_e in carrito:
+            carrito[doc_e]["config"].update({
+                "horario_actual": h_actual,
+                "horario_nuevo":  h_nuevo,
+                "fecha_vigencia": fecha_vig,
+                "justificacion":  justif,
+            })
+
+    # ── Cambio de cargo ──────────────────────────────────────────────────
+    elif tipo_doc == "cambio_cargo":
+        c1, c2 = st.columns(2)
+        with c1:
+            cargo_actual = st.text_input("Cargo actual",
+                key="cfg_cargo_actual")
+            fecha_vig_c = st.date_input("Fecha de vigencia *",
+                value=date.today(), key="cfg_fecha_vig_cargo")
+        with c2:
+            cargo_nuevo = st.text_input("Nuevo cargo *",
+                key="cfg_cargo_nuevo")
+            salario_nuevo = st.number_input(
+                "Nuevo salario (opcional, si cambia)",
+                min_value=0.0, step=50000.0, key="cfg_salario_cargo")
+        funciones = st.text_area("Funciones principales del nuevo cargo",
+            placeholder="Ej: Liderar proyectos, coordinar equipo de 5 personas...",
+            key="cfg_funciones_cargo")
+        for doc_e in carrito:
+            carrito[doc_e]["config"].update({
+                "cargo_actual":     cargo_actual,
+                "cargo_nuevo":      cargo_nuevo,
+                "fecha_vigencia":   fecha_vig_c,
+                "salario_nuevo":    salario_nuevo,
+                "funciones_nuevas": funciones,
+            })
+
+    # ── Cambio salarial ──────────────────────────────────────────────────
+    elif tipo_doc == "cambio_salario":
+        c1, c2 = st.columns(2)
+        with c1:
+            sal_actual = st.number_input("Salario actual",
+                min_value=0.0, step=50000.0, key="cfg_sal_actual")
+            fecha_vig_s = st.date_input("Fecha de vigencia *",
+                value=date.today(), key="cfg_fecha_vig_salario")
+        with c2:
+            sal_nuevo = st.number_input("Nuevo salario *",
+                min_value=0.0, step=50000.0, key="cfg_sal_nuevo")
+        motivo_sal = st.text_input("Motivo del ajuste (opcional)",
+            placeholder="Ej: Reconocimiento por desempeño, ajuste anual...",
+            key="cfg_motivo_salario")
+        for doc_e in carrito:
+            carrito[doc_e]["config"].update({
+                "salario_actual": sal_actual,
+                "salario_nuevo":  sal_nuevo,
+                "fecha_vigencia": fecha_vig_s,
+                "motivo":         motivo_sal,
+            })
+
+    # ── Cambio de sede ───────────────────────────────────────────────────
+    elif tipo_doc == "cambio_sede":
+        c1, c2 = st.columns(2)
+        with c1:
+            sede_actual = st.text_input("Sede actual", key="cfg_sede_actual")
+            fecha_vig_sede = st.date_input("Fecha de vigencia *",
+                value=date.today(), key="cfg_fecha_vig_sede")
+        with c2:
+            sede_nueva = st.text_input("Nueva sede *", key="cfg_sede_nueva")
+            direccion_nueva = st.text_input("Dirección de la nueva sede",
+                key="cfg_dir_nueva")
+        motivo_sede = st.text_area("Motivo del traslado (opcional)",
+            key="cfg_motivo_sede")
+        for doc_e in carrito:
+            carrito[doc_e]["config"].update({
+                "sede_actual":     sede_actual,
+                "sede_nueva":      sede_nueva,
+                "direccion_nueva": direccion_nueva,
+                "fecha_vigencia":  fecha_vig_sede,
+                "motivo":          motivo_sede,
+            })
+
+    # ── Ascenso ──────────────────────────────────────────────────────────
+    elif tipo_doc == "ascenso":
+        c1, c2 = st.columns(2)
+        with c1:
+            cargo_a_actual = st.text_input("Cargo actual", key="cfg_cargo_a_act")
+            sal_a_actual = st.number_input("Salario actual",
+                min_value=0.0, step=50000.0, key="cfg_sal_a_act")
+        with c2:
+            cargo_a_nuevo = st.text_input("Nuevo cargo *", key="cfg_cargo_a_nuevo")
+            sal_a_nuevo = st.number_input("Nuevo salario",
+                min_value=0.0, step=50000.0, key="cfg_sal_a_nuevo")
+        fecha_vig_a = st.date_input("Fecha de vigencia *",
+            value=date.today(), key="cfg_fecha_vig_ascenso")
+        mensaje_a = st.text_area("Mensaje personalizado (opcional)",
+            placeholder="Ej: Reconocemos su liderazgo natural y compromiso.",
+            key="cfg_mensaje_ascenso")
+        for doc_e in carrito:
+            carrito[doc_e]["config"].update({
+                "cargo_actual":     cargo_a_actual,
+                "cargo_nuevo":      cargo_a_nuevo,
+                "salario_actual":   sal_a_actual,
+                "salario_nuevo":    sal_a_nuevo,
+                "fecha_vigencia":   fecha_vig_a,
+                "mensaje_personal": mensaje_a,
+            })
+
+    # ── Reconocimiento ───────────────────────────────────────────────────
+    elif tipo_doc == "reconocimiento":
+        motivo_rec = st.text_input("Motivo del reconocimiento *",
+            placeholder="Ej: cumplimiento de metas, 5 años de servicio...",
+            key="cfg_motivo_rec")
+        detalle_rec = st.text_area("Detalle o descripción",
+            placeholder="Describa el logro específico o la razón del reconocimiento.",
+            key="cfg_detalle_rec")
+        for doc_e in carrito:
+            carrito[doc_e]["config"].update({
+                "motivo":  motivo_rec,
+                "detalle": detalle_rec,
+            })
+
+    # ── Permiso (remunerado o no) ────────────────────────────────────────
+    elif tipo_doc in ("permiso_remunerado", "permiso_no_remunerado"):
+        c1, c2 = st.columns(2)
+        with c1:
+            fecha_ini_p = st.date_input("Fecha de inicio *",
+                value=date.today(), key="cfg_fecha_ini_permiso")
+        with c2:
+            fecha_fin_p = st.date_input("Fecha de fin *",
+                value=date.today(), key="cfg_fecha_fin_permiso")
+        dias_p = st.number_input("Días autorizados", min_value=1, step=1, value=1,
+            key="cfg_dias_permiso")
+        motivo_p = st.text_area("Motivo *",
+            placeholder="Ej: Cita médica, diligencia personal...",
+            key="cfg_motivo_permiso")
+        for doc_e in carrito:
+            carrito[doc_e]["config"].update({
+                "fecha_inicio": fecha_ini_p,
+                "fecha_fin":    fecha_fin_p,
+                "dias":         dias_p,
+                "motivo":       motivo_p,
+            })
+
+    # ── Constancia de retiro ─────────────────────────────────────────────
+    elif tipo_doc == "constancia_retiro":
+        motivo_ret = st.text_input("Motivo del retiro (opcional)",
+            placeholder="Ej: Renuncia voluntaria, terminación de contrato...",
+            key="cfg_motivo_ret")
+        st.info("💡 Este documento usa la fecha de retiro registrada en la ficha del empleado.")
+        for doc_e in carrito:
+            carrito[doc_e]["config"].update({
+                "motivo_retiro": motivo_ret,
+            })
+
+    # ── Entrega de dotación ──────────────────────────────────────────────
+    elif tipo_doc == "entrega_dotacion":
+        fecha_ent = st.date_input("Fecha de entrega *",
+            value=date.today(), key="cfg_fecha_entrega_dot")
+
+        st.markdown("**Items entregados:**")
+        st.caption("Agrega uno o más items separados por línea nueva.")
+        items_texto = st.text_area(
+            "Lista de items (uno por línea, formato: `descripción | cantidad | estado`)",
+            placeholder="Camisa polo con logo | 3 | Nuevo\nPantalón dril azul | 2 | Nuevo\nZapato de seguridad | 1 | Nuevo",
+            key="cfg_items_dot", height=120)
+        obs_dot = st.text_input("Observaciones (opcional)", key="cfg_obs_dot")
+
+        # Parsear items
+        items = []
+        for linea in items_texto.strip().split("\n"):
+            if "|" in linea:
+                partes = [p.strip() for p in linea.split("|")]
+                if len(partes) >= 2:
+                    items.append({
+                        "descripcion": partes[0],
+                        "cantidad":    int(partes[1]) if partes[1].isdigit() else 1,
+                        "estado":      partes[2] if len(partes) >= 3 else "Nuevo",
+                    })
+
+        for doc_e in carrito:
+            carrito[doc_e]["config"].update({
+                "fecha_entrega": fecha_ent,
+                "items":         items,
+                "observaciones": obs_dot,
+            })
+
+    # ── Autorización de descuento ────────────────────────────────────────
+    elif tipo_doc == "autorizacion_descuento":
+        concepto_d = st.text_input("Concepto del descuento *",
+            placeholder="Ej: Préstamo personal, libranza, elemento perdido...",
+            key="cfg_concepto_desc")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            valor_total_d = st.number_input("Valor total *",
+                min_value=0.0, step=50000.0, key="cfg_valor_total_desc")
+        with c2:
+            num_cuotas_d = st.number_input("Número de cuotas *",
+                min_value=1, step=1, value=1, key="cfg_num_cuotas_desc")
+        with c3:
+            valor_cuota_d = st.number_input("Valor por cuota",
+                min_value=0.0, step=10000.0,
+                value=float(valor_total_d/num_cuotas_d) if num_cuotas_d > 0 else 0.0,
+                key="cfg_valor_cuota_desc")
+        fecha_ini_d = st.date_input("Fecha de inicio del descuento *",
+            value=date.today(), key="cfg_fecha_ini_desc")
+        for doc_e in carrito:
+            carrito[doc_e]["config"].update({
+                "concepto":     concepto_d,
+                "valor_total":  valor_total_d,
+                "num_cuotas":   num_cuotas_d,
+                "valor_cuota":  valor_cuota_d,
+                "fecha_inicio": fecha_ini_d,
+            })
+
     # ── Contratos laborales ──────────────────────────────────────────────
     elif tipo_doc in ("contrato_indefinido","contrato_fijo","contrato_obra","contrato_prestacion"):
         st.markdown("**Configuración del contrato:**")
@@ -854,6 +1081,96 @@ def _ejecutar_generacion_unificada(
                 ruta = str(SALIDAS / f"Terminacion_{nb}.pdf")
                 generar_carta_terminacion(emp_doc, datos_t, ruta,
                     config_term, disenio, usar_mda, membrete, usar_logo)
+
+            # ── CARTAS ADMINISTRATIVAS (Etapa 7 - documentos nuevos) ──
+            elif tipo_doc in ("cambio_horario", "cambio_cargo", "cambio_salario",
+                                "cambio_sede", "ascenso", "reconocimiento",
+                                "permiso_remunerado", "permiso_no_remunerado",
+                                "constancia_retiro", "entrega_dotacion",
+                                "autorizacion_descuento"):
+                from utils.cartas_administrativas import (
+                    generar_cambio_horario, generar_cambio_cargo,
+                    generar_cambio_salarial, generar_cambio_sede,
+                    generar_ascenso, generar_reconocimiento,
+                    generar_permiso, generar_constancia_retiro,
+                    generar_entrega_dotacion, generar_autorizacion_descuento,
+                )
+                _MAPEO_CARTAS = {
+                    "cambio_horario":         (generar_cambio_horario, "CambioHorario"),
+                    "cambio_cargo":           (generar_cambio_cargo, "CambioCargo"),
+                    "cambio_salario":         (generar_cambio_salarial, "CambioSalarial"),
+                    "cambio_sede":            (generar_cambio_sede, "CambioSede"),
+                    "ascenso":                (generar_ascenso, "Ascenso"),
+                    "reconocimiento":         (generar_reconocimiento, "Reconocimiento"),
+                    "permiso_remunerado":     (generar_permiso, "PermisoRemunerado"),
+                    "permiso_no_remunerado":  (generar_permiso, "PermisoNoRemunerado"),
+                    "constancia_retiro":      (generar_constancia_retiro, "ConstanciaRetiro"),
+                    "entrega_dotacion":       (generar_entrega_dotacion, "ActaDotacion"),
+                    "autorizacion_descuento": (generar_autorizacion_descuento, "AutorizDescuento"),
+                }
+                gen_fn, prefix = _MAPEO_CARTAS[tipo_doc]
+                ruta = str(SALIDAS / f"{prefix}_{nb}.pdf")
+
+                # Config específica según tipo
+                config_carta = dict(conf)
+                if tipo_doc == "permiso_no_remunerado":
+                    config_carta["remunerado"] = False
+                elif tipo_doc == "permiso_remunerado":
+                    config_carta["remunerado"] = True
+
+                gen_fn(emp_doc, datos_empresa, ruta, config_carta,
+                        disenio, usar_mda, membrete, usar_logo)
+
+            else:
+                # ─── Catch-all: usar el generador universal ───
+                # Cubre los 16 documentos nuevos (Etapa 7)
+                try:
+                    from utils.plantillas_universales import (
+                        generar_documento, PLANTILLAS,
+                    )
+                    # Mapeo de códigos del catálogo → códigos del generador universal
+                    _MAPEO_UNIV = {
+                        "paz_salvo":              "paz_y_salvo",
+                        "entrega_cargo":          "acta_entrega_cargo",
+                        "entrega_equipos":        "acta_entrega_equipos",
+                        "entrega_dotacion":       "acta_entrega_dotacion",
+                        "cambio_salario":         "carta_cambio_salario",
+                        "cambio_cargo":           "carta_cambio_cargo",
+                    }
+                    tipo_universal = _MAPEO_UNIV.get(tipo_doc, tipo_doc)
+
+                    if tipo_universal in PLANTILLAS:
+                        nombre_archivo = tipo_universal.replace("_", "").title()
+                        ruta = str(SALIDAS / f"{nombre_archivo}_{nb}.pdf")
+
+                        # Preparar empleado con todos los datos disponibles
+                        emp_doc_univ = {**emp, "documento": doc_e}
+
+                        # Datos extra específicos por tipo (los pasa el usuario)
+                        datos_extra = conf.get("datos_extra", {})
+
+                        generar_documento(
+                            tipo=tipo_universal,
+                            empleado=emp_doc_univ,
+                            datos_empresa=datos_empresa,
+                            ruta_salida=ruta,
+                            datos_extra=datos_extra,
+                            disenio=disenio,
+                            usar_marca_agua=usar_mda,
+                            membrete=membrete,
+                            usar_logo=usar_logo,
+                        )
+                    else:
+                        st.warning(f"⚠️ Tipo '{tipo_doc}' aún no está implementado.")
+                        continue
+                except Exception as e_univ:
+                    st.error(f"❌ Error generando {tipo_doc}: {e_univ}")
+                    try:
+                        from utils.logs import log_error
+                        log_error("universal.fallo", tipo=tipo_doc, error=str(e_univ))
+                    except Exception:
+                        pass
+                    continue
 
             if ruta:
                 archivos.append(ruta)
