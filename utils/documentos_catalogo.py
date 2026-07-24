@@ -15,13 +15,11 @@ Esta arquitectura permite agregar documentos sin tocar app.py.
 PLAN_ORDEN = ["gratuito", "basico", "pro", "empresarial"]
 
 # ─── MODO BETA (validación pre-lanzamiento) ────────────────────────────────
-# Cuando MODO_BETA_SIN_LIMITES=1 en el entorno, TODOS los usuarios pueden
-# generar TODOS los documentos sin importar su plan.
-#
-# Diseñado para permitir pruebas completas mientras se valida la plataforma.
-# Para reactivar los límites de plan, elimina la variable de entorno o ponla en 0.
+# Por defecto está ACTIVO para permitir pruebas completas de la plataforma.
+# Cuando se quiera desactivar (para producción real con clientes), poner
+# MODO_BETA_SIN_LIMITES=0 en el entorno.
 import os as _os
-_MODO_BETA = _os.getenv("MODO_BETA_SIN_LIMITES", "0").lower() in ("1", "true", "yes", "on")
+_MODO_BETA = _os.getenv("MODO_BETA_SIN_LIMITES", "1").lower() in ("1", "true", "yes", "on")
 
 
 def plan_permite(plan_usuario: str, plan_requerido: str) -> bool:

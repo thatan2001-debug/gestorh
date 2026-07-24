@@ -190,7 +190,9 @@ def docs_restantes_totales(plan: str, docs_usados: int) -> int | None:
 def _modo_beta_activo() -> bool:
     """True si el modo beta está activo (todos los límites desactivados)."""
     import os
-    return os.getenv("MODO_BETA_SIN_LIMITES", "0").lower() in ("1", "true", "yes", "on")
+    # Por defecto ACTIVO — para desactivar en producción real:
+    # variable de entorno MODO_BETA_SIN_LIMITES=0
+    return os.getenv("MODO_BETA_SIN_LIMITES", "1").lower() in ("1", "true", "yes", "on")
 
 
 def obtener_limite_plan(plan: str) -> dict:
