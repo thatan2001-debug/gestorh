@@ -144,7 +144,7 @@ def _generar_contrato_base(empleado, datos_empresa, ruta_salida, config,
         paleta=paleta, estilos=estilos,
         cargo_firmante=datos_empresa.get("_cargo_firmante","Representante Legal"))
 
-    _fn = lambda c,d: _pie(c, d, paleta, logo, usar_marca_agua)
+    _fn = lambda c,d: _pie(c, d, paleta, logo, usar_marca_agua, membrete_oficial_path=(datos_empresa.get("membrete_oficial_path") if datos_empresa.get("modo_generacion") == "solo_texto_membrete" else None))
     doc.build(el, onFirstPage=_fn, onLaterPages=_fn)
 
 
@@ -482,7 +482,7 @@ def generar_carta_terminacion(empleado, datos_empresa, ruta_salida, config,
         "acepta haber recibido la presente comunicación en la fecha indicada.",
         estilos["nota"]))
 
-    _fn = lambda c,d: _pie(c, d, paleta, logo, usar_marca_agua)
+    _fn = lambda c,d: _pie(c, d, paleta, logo, usar_marca_agua, membrete_oficial_path=(datos_empresa.get("membrete_oficial_path") if datos_empresa.get("modo_generacion") == "solo_texto_membrete" else None))
     doc.build(el, onFirstPage=_fn, onLaterPages=_fn)
 
 
@@ -655,7 +655,7 @@ def generar_otrosi(empleado, datos_empresa, ruta_salida, config,
         paleta=paleta, estilos=estilos,
         cargo_firmante=datos_empresa.get("_cargo_firmante","Representante Legal"))
 
-    _fn = lambda c,d: _pie(c, d, paleta, logo, usar_marca_agua)
+    _fn = lambda c,d: _pie(c, d, paleta, logo, usar_marca_agua, membrete_oficial_path=(datos_empresa.get("membrete_oficial_path") if datos_empresa.get("modo_generacion") == "solo_texto_membrete" else None))
     doc.build(el, onFirstPage=_fn, onLaterPages=_fn)
 
 

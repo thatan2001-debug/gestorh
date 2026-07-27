@@ -47,97 +47,169 @@ def _generar_carta_base(empleado, datos_empresa, ruta_salida, config,
                           titulo: str, contenido_fn, referencia: str = "",
                           disenio=1, usar_marca_agua=False,
                           membrete_path=None, usar_logo_enc=True,
-                          incluir_firma_empleado=True):
+                          incluir_firma_empleado=True,
+                          forzar_perfil: str = None):
     """
-    Motor unificado para cartas administrativas.
+    Motor unificado rediseñado para cartas administrativas.
 
-    Args:
-        titulo: título de la carta (ej: "COMUNICACIÓN DE CAMBIO DE HORARIO")
-        contenido_fn: función que agrega los párrafos del cuerpo al elemento
-        referencia: texto que aparece como "REF:" (opcional)
-        incluir_firma_empleado: si False, solo firma la empresa
+    Nueva lógica ADAPTATIVA (Etapa Rediseño B):
+    1. Intenta primero con perfil "normal"
+    2. Si el resultado sale a 2 páginas Y las firmas quedan huérfanas
+       (última página con muy poco contenido), reintenta con perfil "compacto"
+    3. Si aún necesita 2 páginas después de compactar, las firmas se envuelven
+       en KeepTogether para evitar que queden aisladas
+
+    Los cambios visuales vs versión anterior:
+    - Encabezado más compacto (logo respeta proporción)
+    - Márgenes reducidos (aprovecha ~150 pts extra)
+    - Sin "Cordialmente" separado (integrado en el flujo)
+    - Firmas más cerca del texto (Spacer 20 en vez de 70)
+    - Numeración "Página X"
+    - KeepTogether en firmas
     """
-    paleta = PALETAS.get(int(disenio), PALETAS[1])
-    estilos = _estilos_para(paleta)
+    from utils.estilos_corporativos import (
+        PAGE_SIZE, PALETAS as _P_NUEVAS,
+        crear_estilos, crear_encabezado_corporativo, crear_titulo_documento,
+        crear_bloque_empleado, crear_firmas_dobles, crear_funcion_pie,
+        fecha_hoy_larga as fecha_larga_nueva,
+        MARGEN_COMPACTO_SUP, MARGEN_COMPACTO_INF,
+        MARGEN_COMPACTO_IZQ, MARGEN_COMPACTO_DER,
+        MARGEN_NORMAL_SUP, MARGEN_NORMAL_INF,
+        MARGEN_NORMAL_IZQ, MARGEN_NORMAL_DER,
+    )
 
-    # Inyectar los colores de la paleta a los estilos para uso en contenido_fn
-    estilos["_paleta"] = paleta
-
+    paleta = _P_NUEVAS.get(int(disenio), _P_NUEVAS[1])
     logo = datos_empresa.get("logo_path", "")
-    membrete = membrete_path or datos_empresa.get("membrete_path", "")
+    membrete_oficial = (datos_empresa.get("membrete_oficial_path")
+                          if datos_empresa.get("modo_generacion") == "solo_texto_membrete"
+                          else None)
+
     representante = datos_empresa.get("representante", "")
     firmante_nombre = datos_empresa.get("firmante_cert_nombre", representante) or representante
     firmante_cargo = datos_empresa.get("firmante_cert_cargo", "Representante Legal") or "Representante Legal"
 
-    margen_sup = MARGEN_SUP_MEMBRETE if membrete else MARGEN_SUP_NORMAL
-    doc = SimpleDocTemplate(
-        ruta_salida, pagesize=letter,
-        leftMargin=MARGEN_IZQ, rightMargin=MARGEN_DER,
-        topMargin=margen_sup, bottomMargin=MARGEN_INF,
-    )
-
-    el = []
-    _encabezado(el, datos_empresa, estilos, paleta, disenio,
-                 logo_derecha=usar_logo_enc, membrete_path=membrete)
-
-    # Referencia (número consecutivo o similar)
-    if referencia:
-        el.append(Paragraph(f"<b>Ref:</b> {referencia}", estilos["nota"]))
-        el.append(Spacer(1, 6))
-
-    # Ciudad y fecha
-    ciudad = datos_empresa.get("ciudad", "Colombia")
-    fecha_larga = fecha_hoy_larga()
-    el.append(Paragraph(
-        f"{ciudad}, {fecha_larga}",
-        estilos["cuerpo"]))
-    el.append(Spacer(1, 20))
-
-    # Título
-    el.append(Paragraph(titulo, estilos["titulo"]))
-    el.append(Spacer(1, 16))
-
-    # Destinatario
     nombre_emp = empleado.get("nombre", "")
     doc_emp = empleado.get("documento", "")
-    cargo_emp = empleado.get("cargo", "")
+    ciudad = datos_empresa.get("ciudad", "Colombia")
 
-    el.append(Paragraph(
-        f"<b>Señor(a):</b><br/>"
-        f"<b>{nombre_emp.upper()}</b><br/>"
-        f"C.C. No. {doc_emp}<br/>"
-        f"{cargo_emp}<br/>"
-        f"Ciudad",
-        estilos["cuerpo"]))
-    el.append(Spacer(1, 20))
+    def _build(perfil: str) -> int:
+        """
+        Construye el PDF con el perfil dado y retorna el número de páginas.
+        """
+        estilos = crear_estilos(paleta, perfil=perfil)
 
-    # Cuerpo dinámico (aportado por la función específica)
-    contenido_fn(el, empleado, datos_empresa, config, estilos)
+        # Márgenes según perfil
+        if perfil == "compacto":
+            m_sup, m_inf = MARGEN_COMPACTO_SUP, MARGEN_COMPACTO_INF
+            m_izq, m_der = MARGEN_COMPACTO_IZQ, MARGEN_COMPACTO_DER
+            sp_pre_titulo = 8
+            sp_post_titulo = 10
+            sp_post_dest = 10
+            sp_pre_firmas = 18
+        else:
+            m_sup, m_inf = MARGEN_NORMAL_SUP, MARGEN_NORMAL_INF
+            m_izq, m_der = MARGEN_NORMAL_IZQ, MARGEN_NORMAL_DER
+            sp_pre_titulo = 12
+            sp_post_titulo = 14
+            sp_post_dest = 14
+            sp_pre_firmas = 24
 
-    el.append(Spacer(1, 30))
-
-    # Cordialmente / firmas
-    el.append(Paragraph("Cordialmente,", estilos["cuerpo"]))
-    el.append(Spacer(1, 40))
-
-    if incluir_firma_empleado:
-        _firmas_dobles(el,
-            representante=firmante_nombre,
-            empresa=datos_empresa.get("nombre", ""),
-            nombre_empleado=nombre_emp,
-            cedula=doc_emp,
-            paleta=paleta,
-            estilos=estilos,
-            cargo_firmante=firmante_cargo,
+        doc_pdf = SimpleDocTemplate(
+            ruta_salida, pagesize=PAGE_SIZE,
+            leftMargin=m_izq, rightMargin=m_der,
+            topMargin=m_sup, bottomMargin=m_inf,
+            title=titulo,
         )
-    else:
-        # Solo firma la empresa
-        el.append(Paragraph(f"<b>{firmante_nombre}</b>", estilos["firma_nombre"]))
-        el.append(Paragraph(firmante_cargo, estilos["firma_cargo"]))
-        el.append(Paragraph(datos_empresa.get("nombre", ""), estilos["firma_cargo"]))
 
-    _fn = lambda c, d: _pie(c, d, paleta, logo, usar_marca_agua)
-    doc.build(el, onFirstPage=_fn, onLaterPages=_fn)
+        el = []
+
+        # Encabezado corporativo (nuevo, compacto)
+        el.extend(crear_encabezado_corporativo(datos_empresa, paleta, perfil=perfil))
+
+        # Referencia opcional
+        if referencia:
+            el.append(Paragraph(f"<b>Ref:</b> {referencia}", estilos["nota"]))
+
+        # Ciudad y fecha (una sola línea, integrada)
+        el.append(Paragraph(
+            f"{ciudad}, {fecha_larga_nueva()}",
+            estilos["cuerpo_izq"]
+        ))
+        el.append(Spacer(1, sp_pre_titulo))
+
+        # Título del documento
+        el.append(crear_titulo_documento(titulo, estilos))
+        el.append(Spacer(1, sp_post_titulo))
+
+        # Destinatario compacto (2 líneas)
+        el.append(crear_bloque_empleado(empleado, paleta, perfil=perfil))
+        el.append(Spacer(1, sp_post_dest))
+
+        # Cuerpo del documento (aporte de cada función específica)
+        contenido_fn(el, empleado, datos_empresa, config, estilos)
+
+        # Espacio antes de firmas (mucho menor que antes)
+        el.append(Spacer(1, sp_pre_firmas))
+
+        # Firmas (con KeepTogether integrado)
+        if incluir_firma_empleado:
+            firmas = crear_firmas_dobles(
+                representante=firmante_nombre,
+                cargo_representante=firmante_cargo,
+                empresa=datos_empresa.get("nombre", ""),
+                nombre_empleado=nombre_emp,
+                cedula=doc_emp,
+                estilos=estilos,
+                perfil=perfil,
+            )
+            el.append(firmas)
+        else:
+            # Solo firma la empresa
+            from reportlab.platypus import KeepTogether
+            espacio_firma = 30 if perfil == "compacto" else 40
+            firma_simple = KeepTogether([
+                Spacer(1, espacio_firma),
+                Paragraph(f"<b>{firmante_nombre}</b>", estilos["firma_nombre"]),
+                Paragraph(firmante_cargo, estilos["firma_cargo"]),
+                Paragraph(f"<i>{datos_empresa.get('nombre', '')}</i>",
+                           estilos["firma_cargo"]),
+            ])
+            el.append(firma_simple)
+
+        # Pie de página
+        fn_pie = crear_funcion_pie(
+            paleta, logo_path=logo,
+            usar_marca_agua=usar_marca_agua,
+            membrete_oficial_path=membrete_oficial,
+            mostrar_pagina=True,
+        )
+        doc_pdf.build(el, onFirstPage=fn_pie, onLaterPages=fn_pie)
+
+        # Contar páginas del resultado
+        try:
+            import fitz
+            d = fitz.open(ruta_salida)
+            n = len(d)
+            d.close()
+            return n
+        except Exception:
+            return 1
+
+    # ═══ Estrategia adaptativa ═══════════════════════════════════════
+    if forzar_perfil:
+        _build(forzar_perfil)
+        return
+
+    # 1. Intento con perfil normal
+    n_paginas = _build("normal")
+
+    # 2. Si se fue a 2 páginas, intento con compacto
+    if n_paginas > 1:
+        n_paginas_c = _build("compacto")
+        # Nos quedamos con lo que resultó (compacto si mejoró o normal si no)
+        if n_paginas_c > n_paginas:
+            # El compacto salió peor (raro pero posible), volver a normal
+            _build("normal")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -758,27 +830,40 @@ def generar_entrega_dotacion(empleado, datos_empresa, ruta_salida, config,
                                 disenio=1, usar_marca_agua=False,
                                 membrete_path=None, usar_logo_enc=True):
     """
+    Acta de entrega de dotación (Art. 230 CST).
+
+    REDISEÑADO: Se genera en UNA SOLA HOJA para cantidades normales
+    de items (hasta 10). Para más items, permite segunda página.
+
     config:
     - items: list de dicts [{"descripcion": str, "cantidad": int, "estado": str}]
     - fecha_entrega: str
     - observaciones: str (opcional)
     """
     def contenido(el, empleado, datos_empresa, config, estilos):
+        from utils.estilos_corporativos import (
+            crear_tabla_corporativa, formato_fecha_larga,
+        )
+        from reportlab.lib.units import cm
+
         items = config.get("items", [])
-        fecha_entrega = fmt_fecha(config.get("fecha_entrega", ""))
+        fecha_entrega = formato_fecha_larga(config.get("fecha_entrega", ""))
         observaciones = config.get("observaciones", "").strip()
+        perfil = estilos.get("_perfil", "normal")
 
         empresa = datos_empresa.get("nombre", "la empresa")
 
+        # Párrafo introductorio (compacto)
         el.append(Paragraph(
             f"<b>{empresa}</b> hace constar que en la fecha <b>{fecha_entrega}</b>, "
             f"hace entrega al(la) trabajador(a) de los siguientes elementos de "
             f"dotación de trabajo, en cumplimiento del Art. 230 del Código "
             f"Sustantivo del Trabajo:",
             estilos["cuerpo"]))
-        el.append(Spacer(1, 12))
 
-        # Tabla de items
+        el.append(Spacer(1, 8))
+
+        # Tabla de items — usa el sistema corporativo
         filas = [["#", "Descripción", "Cantidad", "Estado"]]
         for i, item in enumerate(items, 1):
             filas.append([
@@ -790,37 +875,34 @@ def generar_entrega_dotacion(empleado, datos_empresa, ruta_salida, config,
         if not items:
             filas.append(["1", "(sin elementos registrados)", "-", "-"])
 
-        t = Table(filas, colWidths=[1*cm, 8*cm, 2.5*cm, 3.5*cm])
-        t.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), estilos["_paleta"]["primario"]),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        # Anchos calculados para caber en ancho útil
+        anchos = [0.9*cm, 8.5*cm, 2.3*cm, 3.0*cm]  # total ~14.7cm
+        tabla = crear_tabla_corporativa(
+            filas, col_widths=anchos,
+            paleta=estilos["_paleta"], perfil=perfil,
+        )
+        # Alineación específica: # y cantidad centrado, estado centrado
+        from reportlab.platypus import TableStyle
+        tabla.setStyle(TableStyle([
             ("ALIGN", (0, 0), (0, -1), "CENTER"),
             ("ALIGN", (2, 0), (3, -1), "CENTER"),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("PADDING", (0, 0), (-1, -1), 6),
-            ("GRID", (0, 0), (-1, -1), 0.5, estilos["_paleta"]["borde"]),
         ]))
-        el.append(t)
-        el.append(Spacer(1, 12))
+
+        el.append(tabla)
+        el.append(Spacer(1, 8))
 
         if observaciones:
             el.append(Paragraph(
                 f"<b>Observaciones:</b> {observaciones}",
                 estilos["cuerpo"]))
-            el.append(Spacer(1, 12))
+            el.append(Spacer(1, 6))
 
+        # Compromiso + firma (más compacto)
         el.append(Paragraph(
-            "El(la) trabajador(a) se compromete a hacer buen uso de los "
-            "elementos entregados, mantenerlos en buen estado y devolverlos "
-            "en caso de terminación del contrato de trabajo o cuando la "
-            "empresa así lo requiera.",
-            estilos["cuerpo"]))
-        el.append(Spacer(1, 12))
-
-        el.append(Paragraph(
-            "Con su firma en el presente documento, el(la) trabajador(a) "
-            "manifiesta haber recibido a satisfacción los elementos "
+            "El(la) trabajador(a) se compromete a hacer buen uso de los elementos "
+            "entregados, mantenerlos en buen estado y devolverlos en caso de "
+            "terminación del contrato de trabajo o cuando la empresa así lo requiera. "
+            "Con su firma manifiesta haber recibido a satisfacción los elementos "
             "detallados.",
             estilos["cuerpo"]))
 

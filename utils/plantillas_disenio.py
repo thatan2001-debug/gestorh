@@ -185,15 +185,66 @@ def _dibujar_marca_agua(canvas_obj, doc, logo_path: str):
     )
 
 
+def _dibujar_membrete_oficial(canvas_obj, doc, membrete_oficial_path: str):
+    """
+    Dibuja el membrete oficial de la empresa como fondo de página completo.
+    El texto del documento se escribe encima respetando los márgenes normales.
+
+    Args:
+        membrete_oficial_path: ruta al PNG del membrete procesado
+    """
+    try:
+        from PIL import Image as PILImage
+        img = PILImage.open(membrete_oficial_path)
+        ancho_img, alto_img = img.size
+
+        # Página tamaño Letter en puntos (612 x 792)
+        ancho_pagina, alto_pagina = letter
+
+        # Encajar el membrete a página completa manteniendo proporciones
+        ratio_img = ancho_img / alto_img
+        ratio_pagina = ancho_pagina / alto_pagina
+
+        if ratio_img > ratio_pagina:
+            # Imagen más ancha — ajustar por ancho
+            w = ancho_pagina
+            h = ancho_pagina / ratio_img
+            x = 0
+            y = (alto_pagina - h) / 2
+        else:
+            # Imagen más alta — ajustar por alto
+            h = alto_pagina
+            w = alto_pagina * ratio_img
+            y = 0
+            x = (ancho_pagina - w) / 2
+
+        canvas_obj.drawImage(
+            membrete_oficial_path, x, y, width=w, height=h,
+            preserveAspectRatio=True, mask="auto"
+        )
+    except Exception:
+        # Si falla, silenciosamente no dibujar (el documento sigue funcionando)
+        pass
+
+
 def _pie(canvas_obj, doc, paleta: dict, logo_path: str = None,
          usar_marca_agua: bool = False,
          logo_enc_x: float = None, logo_enc_y: float = None,
-         logo_enc_w: float = 2.8*cm, logo_enc_h: float = 2.8*cm):
+         logo_enc_w: float = 2.8*cm, logo_enc_h: float = 2.8*cm,
+         membrete_oficial_path: str = None):
     """
     Dibuja pie de página. También dibuja:
+    - Membrete oficial como fondo si membrete_oficial_path
     - Logo en encabezado (semitransparente, 45%) si logo_enc_x/y están definidos
     - Marca de agua de fondo si usar_marca_agua=True
     """
+    # ── Membrete oficial como fondo COMPLETO (modo "solo texto") ──────
+    if membrete_oficial_path:
+        _dibujar_membrete_oficial(canvas_obj, doc, membrete_oficial_path)
+        # En este modo NO se dibuja logo, marca de agua ni pie de página
+        # (el membrete ya contiene todo eso)
+        return
+
     # Logo en encabezado (semitransparente)
     if logo_path and logo_enc_x is not None:
         _dibujar_logo_encabezado(
@@ -240,7 +291,19 @@ def _encabezado(el, datos_empresa, estilos, paleta, disenio,
     1. Logo en esquina superior derecha (tamaño generoso, semitrasp.)
     2. Bloque de color ancho con Nombre + NIT en blanco debajo del logo
     3. Pequeño espacio antes del título
+
+    Si datos_empresa["modo_generacion"] == "solo_texto_membrete", saltamos
+    todo el encabezado — el membrete oficial se dibuja como fondo desde _pie.
     """
+    # ── MODO "SOLO TEXTO SOBRE MEMBRETE" ─────────────────────────────
+    if datos_empresa.get("modo_generacion") == "solo_texto_membrete":
+        if datos_empresa.get("membrete_oficial_path"):
+            # Espacio superior para que el texto no se pegue al membrete
+            el.append(Spacer(1, 20))
+            return
+        # Si eligió el modo pero no subió membrete, seguir con encabezado normal
+        # como fallback (no dejar la página en blanco)
+
     nombre = datos_empresa.get("nombre", "")
     nit    = datos_empresa.get("nit", "")
     logo   = datos_empresa.get("logo_path") if logo_derecha else None
@@ -502,7 +565,7 @@ def generar_certificado(empleado: dict, datos_empresa: dict, ruta_salida: str,
         f"{datos_empresa.get('_cargo_firmante','Representante Legal')} — {datos_empresa.get('nombre','')}",
         estilos["firma_cargo"]))
 
-    _fn = lambda c,d: _pie(c, d, paleta, logo, usar_marca_agua)
+    _fn = lambda c,d: _pie(c, d, paleta, logo, usar_marca_agua, membrete_oficial_path=(datos_empresa.get("membrete_oficial_path") if datos_empresa.get("modo_generacion") == "solo_texto_membrete" else None))
     doc.build(el, onFirstPage=_fn, onLaterPages=_fn)
 
 
@@ -567,7 +630,7 @@ def generar_vacaciones(empleado: dict, datos_empresa: dict, ruta_salida: str,
         f"{datos_empresa.get('_cargo_firmante','Representante Legal')} — {datos_empresa.get('nombre','')}",
         estilos["firma_cargo"]))
 
-    _fn = lambda c,d: _pie(c, d, paleta, logo, usar_marca_agua)
+    _fn = lambda c,d: _pie(c, d, paleta, logo, usar_marca_agua, membrete_oficial_path=(datos_empresa.get("membrete_oficial_path") if datos_empresa.get("modo_generacion") == "solo_texto_membrete" else None))
     doc.build(el, onFirstPage=_fn, onLaterPages=_fn)
 
 
@@ -722,7 +785,7 @@ def generar_liquidacion(resultado: dict, datos_empresa: dict, ruta_salida: str,
         "cesantías, embargos ni casos especiales. Valide con su contador.",
         estilos["nota"]))
 
-    _fn = lambda c,d: _pie(c, d, paleta, logo, usar_marca_agua)
+    _fn = lambda c,d: _pie(c, d, paleta, logo, usar_marca_agua, membrete_oficial_path=(datos_empresa.get("membrete_oficial_path") if datos_empresa.get("modo_generacion") == "solo_texto_membrete" else None))
     doc.build(el, onFirstPage=_fn, onLaterPages=_fn)
 
 
@@ -808,7 +871,7 @@ def generar_certificado_sin_salario(empleado: dict, datos_empresa: dict,
         f"{datos_empresa.get('nombre','')}",
         estilos["firma_cargo"]))
 
-    _fn = lambda c,d: _pie(c, d, paleta, logo, usar_marca_agua)
+    _fn = lambda c,d: _pie(c, d, paleta, logo, usar_marca_agua, membrete_oficial_path=(datos_empresa.get("membrete_oficial_path") if datos_empresa.get("modo_generacion") == "solo_texto_membrete" else None))
     doc.build(el, onFirstPage=_fn, onLaterPages=_fn)
 
 
@@ -918,5 +981,5 @@ def generar_paz_salvo(empleado: dict, datos_empresa: dict,
         "no declaradas al momento del retiro. Conserve copia de este documento.",
         estilos["nota"]))
 
-    _fn = lambda c,d: _pie(c, d, paleta, logo, usar_marca_agua)
+    _fn = lambda c,d: _pie(c, d, paleta, logo, usar_marca_agua, membrete_oficial_path=(datos_empresa.get("membrete_oficial_path") if datos_empresa.get("modo_generacion") == "solo_texto_membrete" else None))
     doc.build(el, onFirstPage=_fn, onLaterPages=_fn)
