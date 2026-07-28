@@ -16,8 +16,7 @@ def _configurar_logo_acceso() -> None:
 
         def markdown_gestorrh(body, *args, **kwargs):
             if isinstance(body, str):
-                # Retirar la regla CSS temporal que podía generar espacios o
-                # recortes al intentar mostrar el logo como fondo externo.
+                # Eliminar el intento anterior basado en una imagen externa.
                 marcador_css = "/* ── Logo corporativo en la pantalla de acceso ── */"
                 if marcador_css in body:
                     inicio = body.find(marcador_css)
@@ -36,13 +35,25 @@ def _configurar_logo_acceso() -> None:
                     if logo.exists():
                         contenido = base64.b64encode(logo.read_bytes()).decode("ascii")
                         html_logo = f"""
-                        <div style="width:100%;text-align:center;padding:0.25rem 0 1.15rem;overflow:visible;">
-                            <img
-                                src="data:image/png;base64,{contenido}"
-                                alt="Gestor RH IA"
-                                style="display:block;width:100%;max-width:680px;height:auto;max-height:none;object-fit:contain;margin:0 auto;"
-                            />
-                        </div>
+                        <style>
+                            .gestorrh-login-logo {{
+                                width: 100%;
+                                max-width: 700px;
+                                height: 180px;
+                                margin: 0 auto 0.8rem auto;
+                                background-image: url('data:image/png;base64,{contenido}');
+                                background-repeat: no-repeat;
+                                background-position: center center;
+                                background-size: contain;
+                            }}
+                            @media (max-width: 640px) {{
+                                .gestorrh-login-logo {{
+                                    height: 115px;
+                                    margin-bottom: 0.45rem;
+                                }}
+                            }}
+                        </style>
+                        <div class="gestorrh-login-logo" role="img" aria-label="Gestor RH IA"></div>
                         """
                         return markdown_original(html_logo, unsafe_allow_html=True)
 
