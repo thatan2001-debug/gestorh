@@ -24,7 +24,17 @@ from utils.preview_disenios import generar_previews, limpiar_previews
 from utils.correo import enviar_documentos, smtp_configurado, instrucciones_gmail
 from utils.estilos import CSS
 
-st.set_page_config(page_title="Gestor RH IA", page_icon="📄", layout="wide")
+# Favicon dinámico: prefiere icono cuadrado si existe, sino usa logo completo, sino emoji
+from pathlib import Path as _Path
+_icono_path = _Path("assets/logo_icono.png")
+_marca_path = _Path("assets/logo_gestorrh.png")
+if _icono_path.exists():
+    _favicon = str(_icono_path)
+elif _marca_path.exists():
+    _favicon = str(_marca_path)
+else:
+    _favicon = "📄"
+st.set_page_config(page_title="Gestor RH IA", page_icon=_favicon, layout="wide")
 st.markdown(CSS, unsafe_allow_html=True)
 
 CARPETA_SALIDAS = Path("salidas"); CARPETA_SALIDAS.mkdir(exist_ok=True)
@@ -133,14 +143,32 @@ for k, v in DEFAULTS.items():
 def pantalla_auth():
     _, col, _ = st.columns([1, 2, 1])
     with col:
-        st.markdown("""
-        <div style='text-align:center;padding:2rem 0 1rem'>
-            <div style='font-size:2.5rem'>📄</div>
-            <h1 style='color:#1B3F6E;margin:0'>Gestor RH IA</h1>
-            <p style='color:#6B7280;margin-top:4px'>
+        # ═══ Encabezado con logo (si existe) ═══════════════════════
+        from pathlib import Path as _P
+        logo_marca = _P("assets/logo_gestorrh.png")
+
+        if logo_marca.exists():
+            # Con logo real de la marca
+            st.markdown("<div style='text-align:center;padding:1.5rem 0 0.5rem'>",
+                          unsafe_allow_html=True)
+            _c1, _c2, _c3 = st.columns([1, 2, 1])
+            with _c2:
+                st.image(str(logo_marca), use_container_width=True)
+            st.markdown("""
+            <p style='color:#6B7280;margin:8px 0 0;text-align:center;font-size:0.95rem'>
                 Documentos laborales para PYMES colombianas
             </p>
-        </div>""", unsafe_allow_html=True)
+            </div>""", unsafe_allow_html=True)
+        else:
+            # Fallback: emoji simple (como antes) si el logo no está subido
+            st.markdown("""
+            <div style='text-align:center;padding:2rem 0 1rem'>
+                <div style='font-size:2.5rem'>📄</div>
+                <h1 style='color:#1B3F6E;margin:0'>Gestor RH IA</h1>
+                <p style='color:#6B7280;margin-top:4px'>
+                    Documentos laborales para PYMES colombianas
+                </p>
+            </div>""", unsafe_allow_html=True)
 
         tab_login, tab_reg = st.tabs(["🔐 Ingresar", "✨ Crear cuenta"])
 
@@ -441,7 +469,24 @@ empresa_ok = bool(st.session_state.datos_empresa.get("nombre") and
 # SIDEBAR
 # ══════════════════════════════════════════════════════════════════════════════
 with st.sidebar:
-    st.markdown("## 📄 Gestor RH IA")
+    # ═══ Logo o título ═══════════════════════════════════════════
+    from pathlib import Path as _P
+    logo_icono = _P("assets/logo_icono.png")
+    logo_marca = _P("assets/logo_gestorrh.png")
+
+    if logo_icono.exists():
+        # Ícono compacto ideal para sidebar
+        c_l, c_r = st.columns([1, 3])
+        with c_l:
+            st.image(str(logo_icono), width=48)
+        with c_r:
+            st.markdown("### Gestor RH IA")
+    elif logo_marca.exists():
+        # Logo completo (más grande, pero mejor que nada)
+        st.image(str(logo_marca), use_container_width=True)
+    else:
+        st.markdown("## 📄 Gestor RH IA")
+
     st.caption(f"Hola, **{u['nombre'].split()[0]}** 👋")
     if usar_supabase():
         st.caption("🟢 Base de datos activa")

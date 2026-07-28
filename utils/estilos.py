@@ -256,32 +256,5 @@ hr {
     color: rgba(255,255,255,0.7);
     margin-top: 2px;
 }
-
-/* ── Logo corporativo en la pantalla de acceso ── */
-div[style*="font-size:2.5rem"],
-div[style*="font-size: 2.5rem"] {
-    width: 100% !important;
-    height: 145px !important;
-    margin: 0 auto 0.35rem !important;
-    background-image: url("https://raw.githubusercontent.com/thatan2001-debug/gestorh/f29b39d9150ed4e27e6941bb4114ef3deffd6879/assets/logo_gestorrh.png") !important;
-    background-repeat: no-repeat !important;
-    background-position: center !important;
-    background-size: contain !important;
-    font-size: 0 !important;
-    line-height: 0 !important;
-}
-div[style*="font-size:2.5rem"] + h1,
-div[style*="font-size: 2.5rem"] + h1,
-div[style*="font-size:2.5rem"] + h1 + p,
-div[style*="font-size: 2.5rem"] + h1 + p {
-    display: none !important;
-}
-
-@media (max-width: 640px) {
-    div[style*="font-size:2.5rem"],
-    div[style*="font-size: 2.5rem"] {
-        height: 105px !important;
-    }
-}
 </style>
 """
