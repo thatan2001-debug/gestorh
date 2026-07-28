@@ -1,70 +1,90 @@
-"""Utilidades compartidas y compatibilidad visual de Gestor RH IA."""
+"""Utilidades compartidas y compatibilidad visual de Gestor RH IA.
+
+La pantalla de autenticación todavía se construye en ``app.py`` con un bloque
+HTML antiguo. Este módulo mantiene la compatibilidad sin alterar la lógica de
+login o registro, pero elimina la regla CSS heredada que cargaba un logo desde
+un commit fijo y sustituye únicamente ese encabezado por el PNG local actual.
+"""
 
 from pathlib import Path
-import base64
 
 
-def _configurar_logo_acceso() -> None:
-    """Sustituye el encabezado antiguo del acceso por el logo local completo."""
+_LEGACY_LOGO_MARKER = "/* ── Logo corporativo en la pantalla de acceso ── */"
+_AUTH_TITLE = "Gestor RH IA"
+_AUTH_SUBTITLE = "Documentos laborales para PYMES colombianas"
+
+
+def _strip_legacy_logo_css(css: str) -> str:
+    """Elimina la regla que apuntaba al logo recortado de un commit antiguo."""
+    if not isinstance(css, str):
+        return css
+
+    start = css.find(_LEGACY_LOGO_MARKER)
+    if start == -1:
+        return css
+
+    end = css.find("</style>", start)
+    if end == -1:
+        return css[:start].rstrip() + "\n</style>\n"
+
+    return css[:start].rstrip() + "\n" + css[end:]
+
+
+def _is_auth_header(body: str) -> bool:
+    """Identifica exclusivamente el encabezado antiguo de login/registro."""
+    return (
+        isinstance(body, str)
+        and "font-size:2.5rem" in body
+        and _AUTH_TITLE in body
+        and _AUTH_SUBTITLE in body
+    )
+
+
+def _clean_global_styles() -> None:
+    """Limpia el CSS antes de que ``app.py`` lo importe y lo envíe al navegador."""
     try:
-        import streamlit as st
+        from . import estilos
 
-        if getattr(st.markdown, "_gestorrh_logo_patch", False):
-            return
-
-        markdown_original = st.markdown
-
-        def markdown_gestorrh(body, *args, **kwargs):
-            if isinstance(body, str):
-                # Eliminar el intento anterior basado en una imagen externa.
-                marcador_css = "/* ── Logo corporativo en la pantalla de acceso ── */"
-                if marcador_css in body:
-                    inicio = body.find(marcador_css)
-                    cierre = body.find("</style>", inicio)
-                    if cierre != -1:
-                        body = body[:inicio] + body[cierre:]
-
-                es_encabezado_acceso = (
-                    "font-size:2.5rem" in body
-                    and "Gestor RH IA" in body
-                    and "Documentos laborales para PYMES colombianas" in body
-                )
-
-                if es_encabezado_acceso:
-                    logo = Path("assets/logo_gestorrh.png")
-                    if logo.exists():
-                        contenido = base64.b64encode(logo.read_bytes()).decode("ascii")
-                        html_logo = f"""
-                        <style>
-                            .gestorrh-login-logo {{
-                                width: 100%;
-                                max-width: 700px;
-                                height: 180px;
-                                margin: 0 auto 0.8rem auto;
-                                background-image: url('data:image/png;base64,{contenido}');
-                                background-repeat: no-repeat;
-                                background-position: center center;
-                                background-size: contain;
-                            }}
-                            @media (max-width: 640px) {{
-                                .gestorrh-login-logo {{
-                                    height: 115px;
-                                    margin-bottom: 0.45rem;
-                                }}
-                            }}
-                        </style>
-                        <div class="gestorrh-login-logo" role="img" aria-label="Gestor RH IA"></div>
-                        """
-                        return markdown_original(html_logo, unsafe_allow_html=True)
-
-            return markdown_original(body, *args, **kwargs)
-
-        markdown_gestorrh._gestorrh_logo_patch = True
-        st.markdown = markdown_gestorrh
-
+        estilos.CSS = _strip_legacy_logo_css(estilos.CSS)
     except Exception:
-        # Una mejora visual nunca debe impedir que la aplicación inicie.
+        # Una corrección visual nunca debe impedir que la aplicación arranque.
         pass
 
 
-_configurar_logo_acceso()
+def _configure_auth_logo() -> None:
+    """Renderiza el logo local completo en las pestañas Ingresar y Crear cuenta."""
+    try:
+        import streamlit as st
+
+        if getattr(st.markdown, "_gestorrh_auth_logo_patch", False):
+            return
+
+        markdown_original = st.markdown
+        logo_path = Path(__file__).resolve().parent.parent / "assets" / "logo_gestorrh.png"
+
+        def markdown_gestorrh(body, *args, **kwargs):
+            if isinstance(body, str):
+                body = _strip_legacy_logo_css(body)
+
+                if _is_auth_header(body) and logo_path.is_file():
+                    # st.image conserva la proporción original y no usa un
+                    # contenedor de altura fija ni una imagen remota cacheada.
+                    st.image(str(logo_path), use_container_width=True)
+                    markdown_original(
+                        '<div aria-hidden="true" style="height:0.65rem"></div>',
+                        unsafe_allow_html=True,
+                    )
+                    return None
+
+            return markdown_original(body, *args, **kwargs)
+
+        markdown_gestorrh._gestorrh_auth_logo_patch = True
+        st.markdown = markdown_gestorrh
+
+    except Exception:
+        # Mantener operativa la autenticación aunque falle una mejora visual.
+        pass
+
+
+_clean_global_styles()
+_configure_auth_logo()
