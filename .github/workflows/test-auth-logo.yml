@@ -9,7 +9,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     steps:
       - name: Checkout repository
@@ -32,3 +32,44 @@ jobs:
 
       - name: Verify Render build helper
         run: python utils/crear_plantilla_excel.py
+
+      - name: Install Playwright Chromium
+        run: |
+          pip install playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Start Streamlit application
+        env:
+          ENVIRONMENT: development
+        run: |
+          streamlit run app.py \
+            --server.port 8501 \
+            --server.address 127.0.0.1 \
+            --server.headless true \
+            > /tmp/gestorrh-streamlit.log 2>&1 &
+          echo $! > /tmp/gestorrh-streamlit.pid
+
+          for attempt in {1..90}; do
+            if curl --fail --silent http://127.0.0.1:8501/_stcore/health > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+
+          cat /tmp/gestorrh-streamlit.log
+          exit 1
+
+      - name: Test responsive login and registration layout
+        run: python tests/verify_auth_layout.py
+
+      - name: Show Streamlit log on failure
+        if: failure()
+        run: cat /tmp/gestorrh-streamlit.log || true
+
+      - name: Upload responsive screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: authentication-responsive-screenshots
+          path: test-artifacts/
+          if-no-files-found: warn
