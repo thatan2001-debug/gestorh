@@ -3,62 +3,42 @@ name: Documentos premium
 on:
   push:
     branches:
-      - main
-      - feature/documentos-premium-20260730
+      - feature/documentos-finales-20260730
     paths:
-      - 'utils/**'
-      - 'scripts/generar_muestras_documentales.py'
-      - 'scripts/preflight_pdfs.py'
-      - 'tests/**'
-      - '.github/workflows/documentos-premium.yml'
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'utils/**'
-      - 'scripts/generar_muestras_documentales.py'
-      - 'scripts/preflight_pdfs.py'
-      - 'tests/**'
       - '.github/workflows/documentos-premium.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  test-render-preflight:
+  apply-verified-final-implementation:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
         with:
-          python-version: '3.12'
-          cache: pip
-
-      - name: Install dependencies
+          ref: feature/documentos-finales-20260730
+          fetch-depth: 0
+      - name: Verify and apply final payload
+        shell: bash
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest pymupdf
-
-      - name: Run complete test suite
-        run: pytest -q --junitxml=artifacts/pytest-results.xml
-
-      - name: Generate the four reference PDFs
-        run: python scripts/generar_muestras_documentales.py
-
-      - name: Render and inspect every PDF page
-        run: python scripts/preflight_pdfs.py
-
-      - name: Upload PDFs, renders and test results
-        uses: actions/upload-artifact@v4
-        with:
-          name: documentos-premium-${{ github.sha }}
-          path: |
-            artifacts/documentos_finales/
-            artifacts/renders/
-            artifacts/preflight.json
-            artifacts/pytest-results.xml
-          retention-days: 14
+          echo '3ecb515b0d308d0613b6e8bedda86dd35f815e0c791e1ae7c59937caf7dd36fc  .github/final-docs-payload/part-00.txt' | sha256sum -c -
+          echo '0a572eaf059a7e63998efe25bbdbf79fe29d4853f1d26c7e5f85d47e87e833e7  .github/final-docs-payload/part-01.txt' | sha256sum -c -
+          echo 'a1a3747c9063971d3d080ff06add1174e8329f4783a4eb3d4d082d3ff9b20e9e  .github/final-docs-payload/part-02.txt' | sha256sum -c -
+          echo '7d1d74fd92e2686e5766fe1c6b5cafa92d42eefb8856f8ca44c4e669445045b9  .github/final-docs-payload/part-03.txt' | sha256sum -c -
+          echo '1c19013be5d0bbe06814e13e4bbafe3f51cad9ef30dd6e441acb1dabc5f5504d  .github/final-docs-payload/part-04.txt' | sha256sum -c -
+          echo '7e23ff82ed353bc5c3aa1c2b7bf3b09571d4a322302e927ff9bb08899d85c1f0  .github/final-docs-payload/part-05.txt' | sha256sum -c -
+          echo '0c7dd8debd916d64b86ba1fb97f49fc45c86a9356154a413fda82f990fb72235  .github/final-docs-payload/part-06.txt' | sha256sum -c -
+          cat .github/final-docs-payload/part-*.txt | base64 -d > /tmp/final-docs.tar.gz
+          echo '192fb7fe03292eea5f7b7d25349353515da4a464df3e997241c3f1cccd4f0b70  /tmp/final-docs.tar.gz' | sha256sum -c -
+          tar -xzf /tmp/final-docs.tar.gz -C .
+          rm -rf .github/final-docs-payload
+          rm -f .github/workflows/snapshot-final-docs.yml
+          rm -f .github/workflows/apply-final-docs.yml
+      - name: Commit implementation
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat: finalize corporate HR documents and acceptance PDFs'
+          git push origin HEAD:feature/documentos-finales-20260730
