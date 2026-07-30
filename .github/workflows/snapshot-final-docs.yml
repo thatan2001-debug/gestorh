@@ -1,0 +1,24 @@
+name: Snapshot final docs branch
+
+on:
+  push:
+    branches:
+      - feature/documentos-finales-20260730
+    paths:
+      - '.github/workflows/snapshot-final-docs.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create source archive
+        run: zip -qr gestorh-current-source.zip . -x '.git/*' 'gestorh-current-source.zip'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gestorh-current-source
+          path: gestorh-current-source.zip
+          retention-days: 2
