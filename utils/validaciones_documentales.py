@@ -51,6 +51,15 @@ def _fecha(valor):
     return None
 
 
+def _sumar_meses(fecha: date, meses: int) -> date:
+    import calendar
+    mes_base = fecha.month - 1 + meses
+    anio = fecha.year + mes_base // 12
+    mes = mes_base % 12 + 1
+    dia = min(fecha.day, calendar.monthrange(anio, mes)[1])
+    return date(anio, mes, dia)
+
+
 def validar_documento(tipo: str, empleado: dict, empresa: dict,
                        config: dict | None = None, contexto: dict | None = None) -> list[Hallazgo]:
     config = config or {}
@@ -95,6 +104,13 @@ def validar_documento(tipo: str, empleado: dict, empresa: dict,
         if config.get("fecha_inicio_precargada") and not config.get("fecha_inicio_confirmada"):
             hallazgos.append(Hallazgo(Nivel.ERROR, "INICIO_NO_CONFIRMADO",
                 "Confirme explícitamente que la fecha propuesta corresponde al inicio real.", "contrato.fecha_inicio"))
+        firma = _fecha(config.get("fecha_celebracion")) or date.today()
+        if inicio and config.get("periodo_prueba") and firma > _sumar_meses(inicio, 2):
+            hallazgos.append(Hallazgo(
+                Nivel.ERROR, "PERIODO_PRUEBA_RETROACTIVO",
+                "La relación laboral inició hace más de dos meses. No se recomienda pactar retroactivamente un periodo de prueba; retírelo o envíe el caso a revisión.",
+                "contrato.periodo_prueba",
+            ))
         if not cargo:
             hallazgos.append(Hallazgo(Nivel.ERROR, "CARGO_FALTANTE", "El cargo es obligatorio para el contrato.", "trabajador.cargo"))
         if float(salario or 0) <= 0:
@@ -132,6 +148,16 @@ def validar_documento(tipo: str, empleado: dict, empresa: dict,
         if tipo_entrega == "dotacion_legal" and not config.get("cumple_requisitos_dotacion"):
             hallazgos.append(Hallazgo(Nivel.ADVERTENCIA, "DOTACION_LEGAL_NO_CONFIRMADA",
                 "No se confirmó el cumplimiento de los requisitos parametrizados para dotación legal.", "dotacion.tipo_entrega"))
+        for idx, item in enumerate(items, 1):
+            if not str(item.get("descripcion") or "").strip():
+                hallazgos.append(Hallazgo(Nivel.ERROR, "DOTACION_DESCRIPCION_FALTANTE",
+                    f"Falta la descripción del elemento {idx}.", f"dotacion.items.{idx}.descripcion"))
+            if item.get("cantidad") in (None, "") or float(item.get("cantidad") or 0) <= 0:
+                hallazgos.append(Hallazgo(Nivel.ERROR, "DOTACION_CANTIDAD_INVALIDA",
+                    f"La cantidad del elemento {idx} debe ser mayor que cero.", f"dotacion.items.{idx}.cantidad"))
+            if not str(item.get("estado") or "").strip():
+                hallazgos.append(Hallazgo(Nivel.ADVERTENCIA, "DOTACION_ESTADO_FALTANTE",
+                    f"Confirme el estado del elemento {idx}.", f"dotacion.items.{idx}.estado"))
 
     elif tipo == "liquidacion":
         corte = _fecha(_valor(config, "fecha_corte", default=_valor(empleado, "Fecha retiro", "fecha_retiro")))
@@ -153,6 +179,14 @@ def validar_documento(tipo: str, empleado: dict, empresa: dict,
         if not config.get("novedades_confirmadas"):
             hallazgos.append(Hallazgo(Nivel.ADVERTENCIA, "NOVEDADES_NO_CONFIRMADAS",
                 "Confirme si existen licencias, suspensiones, incapacidades, comisiones o cambios salariales.", "liquidacion.novedades"))
+        dias_salario = int(config.get("dias_salario_pendiente", 0) or 0)
+        estado_aportes = str(config.get("estado_aportes_periodo_final") or "").strip().lower()
+        if dias_salario > 0 and not estado_aportes:
+            hallazgos.append(Hallazgo(Nivel.ERROR, "APORTES_PERIODO_FINAL_SIN_CONCILIAR",
+                "Indique si los aportes del periodo final ya fueron descontados en nómina.", "liquidacion.aportes_periodo_final"))
+        if dias_salario <= 0 and estado_aportes and estado_aportes not in {"no_existe_salario_pendiente", "no_salary", "sin_salario_pendiente"}:
+            hallazgos.append(Hallazgo(Nivel.INFORMACION, "APORTES_NO_APLICAN",
+                "No existe salario pendiente; no se calculan aportes del periodo final.", "liquidacion.aportes_periodo_final"))
 
     if not _valor(empresa, "representante", "firmante_cert_nombre"):
         hallazgos.append(Hallazgo(Nivel.ADVERTENCIA, "FIRMANTE_FALTANTE",

@@ -382,7 +382,7 @@ def crear_encabezado_corporativo(datos_empresa: dict, paleta: dict,
     nombre = datos_empresa.get("nombre", "")
     nit = datos_empresa.get("nit", "")
     ciudad = datos_empresa.get("ciudad", "")
-    tel = datos_empresa.get("telefono_empresa", "")
+    tel = datos_empresa.get("telefono_empresa") or datos_empresa.get("telefono", "")
     correo = datos_empresa.get("correo_empresa", "")
     logo_path = datos_empresa.get("logo_path", "")
     tiene_logo = bool(logo_path and Path(logo_path).exists())

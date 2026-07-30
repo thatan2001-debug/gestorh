@@ -51,7 +51,7 @@ def crear_control_documental(
     trabajador_id: object,
     empresa_id: object,
     usuario: str = "Usuario autenticado",
-    estado: str = "Generado",
+    estado: str = "Emitido",
     numero: Optional[str] = None,
     ahora: Optional[datetime] = None,
 ) -> ControlDocumento:
@@ -119,32 +119,26 @@ class ControlDocumentalCanvas(canvas.Canvas):
 
     def _dibujar_fondo_y_pie(self, total_paginas: int) -> None:
         ancho, alto = letter
-        if self.usar_marca_agua and self.logo_path and Path(self.logo_path).exists():
+        if self.usar_marca_agua:
             self.saveState()
+            self.translate(ancho / 2, alto / 2)
+            self.rotate(32)
+            self.setFillColor(colors.HexColor("#9CA3AF"))
             try:
-                self.setFillAlpha(0.02)
-                self.setStrokeAlpha(0.02)
-                max_w, max_h = 9.0 * cm, 9.0 * cm
-                self.drawImage(
-                    self.logo_path,
-                    (ancho - max_w) / 2,
-                    (alto - max_h) / 2,
-                    width=max_w,
-                    height=max_h,
-                    preserveAspectRatio=True,
-                    anchor="c",
-                    mask="auto",
-                )
+                self.setFillAlpha(0.16)
             except Exception:
                 pass
+            self.setFont("Helvetica-Bold", 28)
+            self.drawCentredString(0, 8, "BORRADOR - PENDIENTE DE REVISION")
+            self.setFont("Helvetica", 11)
+            self.drawCentredString(0, -12, "No valido para firma ni entrega")
             self.restoreState()
 
-        # Identificación de páginas continuadas sin repetir el encabezado completo.
         if self.getPageNumber() > 1:
             self.saveState()
             self.setFont("Helvetica-Bold", 7.5)
             self.setFillColor(self.paleta.get("primario", colors.HexColor("#1B3F6E")))
-            etiqueta = f"{self.titulo_doc} — CONTINUACIÓN · Trabajador {self.control.trabajador_id}"
+            etiqueta = f"{self.titulo_doc} - CONTINUACION · Trabajador {self.control.trabajador_id}"
             self.drawString(2.0 * cm, alto - 1.25 * cm, etiqueta[:120])
             self.setStrokeColor(self.paleta.get("borde_suave", colors.HexColor("#E5E7EB")))
             self.line(2.0 * cm, alto - 1.42 * cm, ancho - 2.0 * cm, alto - 1.42 * cm)
@@ -158,14 +152,14 @@ class ControlDocumentalCanvas(canvas.Canvas):
         self.line(2.0 * cm, 1.48 * cm, ancho - 2.0 * cm, 1.48 * cm)
         self.setFont("Helvetica", 7.2)
         self.setFillColor(gris)
-        fecha = self.control.generado_en.strftime("%d/%m/%Y %H:%M")
+        fecha = self.control.generado_en.strftime("%d/%m/%Y")
         izquierda = (
-            f"Gestor RH IA · {self.control.codigo} · {self.control.numero} · v{self.control.version_plantilla} · "
-            f"{self.control.estado} · {fecha} COT"
+            f"Gestor RH IA · {self.control.codigo} · {self.control.numero} · "
+            f"Version {self.control.version_plantilla} · {self.control.estado} · {fecha}"
         )
-        self.drawString(2.0 * cm, 1.08 * cm, izquierda[:112])
+        self.drawString(2.0 * cm, 1.08 * cm, izquierda[:116])
         self.drawRightString(ancho - 2.0 * cm, 1.08 * cm,
-                             f"Página {self.getPageNumber()} de {total_paginas}")
+                             f"Pagina {self.getPageNumber()} de {total_paginas}")
         self.restoreState()
 
 
