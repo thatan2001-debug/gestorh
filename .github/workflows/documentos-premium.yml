@@ -32,7 +32,8 @@ jobs:
           echo '7d1d74fd92e2686e5766fe1c6b5cafa92d42eefb8856f8ca44c4e669445045b9  .github/final-docs-payload/part-03.txt' | sha256sum -c -
           echo '1c19013be5d0bbe06814e13e4bbafe3f51cad9ef30dd6e441acb1dabc5f5504d  .github/final-docs-payload/part-04.txt' | sha256sum -c -
           echo '7e23ff82ed353bc5c3aa1c2b7bf3b09571d4a322302e927ff9bb08899d85c1f0  .github/final-docs-payload/part-05.txt' | sha256sum -c -
-          echo '0c7dd8debd916d64b86ba1fb97f49fc45c86a9356154a413fda82f990fb72235  .github/final-docs-payload/part-06.txt' | sha256sum -c -
+          sha256sum .github/final-docs-payload/part-06.txt
+          wc -c .github/final-docs-payload/part-06.txt
           cat .github/final-docs-payload/part-*.txt | base64 -d > /tmp/final-docs.tar.gz
           echo '192fb7fe03292eea5f7b7d25349353515da4a464df3e997241c3f1cccd4f0b70  /tmp/final-docs.tar.gz' | sha256sum -c -
           tar -xzf /tmp/final-docs.tar.gz -C .
