@@ -38,8 +38,7 @@ jobs:
           echo '192fb7fe03292eea5f7b7d25349353515da4a464df3e997241c3f1cccd4f0b70  /tmp/final-docs.tar.gz' | sha256sum -c -
           tar -xzf /tmp/final-docs.tar.gz -C .
           rm -rf .github/final-docs-payload
-          rm -f .github/workflows/snapshot-final-docs.yml
-          rm -f .github/workflows/apply-final-docs.yml
+          git checkout HEAD -- .github/workflows
       - name: Commit implementation
         shell: bash
         run: |
