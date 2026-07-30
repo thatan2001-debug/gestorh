@@ -79,3 +79,17 @@ def test_contrato_sin_periodo_prueba_no_salta_numeracion(tmp_path: Path):
     texto = "\n".join(p.get_text() for p in fitz.open(ruta))
     assert "PRIMERA —" in texto and "SEGUNDA —" in texto and "TERCERA —" in texto
     assert "PERÍODO DE PRUEBA" not in texto
+
+
+def test_liquidacion_confirmada_no_muestra_confirmaciones_pendientes(tmp_path: Path):
+    liquidacion = main(tmp_path)[-1]
+    texto = "\n".join(p.get_text() for p in fitz.open(liquidacion))
+    assert "Pagos previos y novedades confirmados" in texto
+    assert "Existen confirmaciones pendientes" not in texto
+
+
+def test_acta_encabezado_cantidad_no_se_fragmenta(tmp_path: Path):
+    acta = main(tmp_path)[2]
+    texto = "\n".join(p.get_text() for p in fitz.open(acta))
+    assert "Cant." in texto
+    assert "Cant\n." not in texto

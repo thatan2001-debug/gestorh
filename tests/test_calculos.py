@@ -302,3 +302,29 @@ if __name__ == "__main__":
     print("Ejecutando tests de cálculos legales...\n")
     exito = _run_all()
     sys.exit(0 if exito else 1)
+
+
+def test_intereses_cesantias_multianuales_se_periodizan():
+    """Un saldo de varios años no se trata como un único periodo acumulado."""
+    from utils.calcular_liquidacion import _calcular_intereses_cesantias_periodizados, _dias_360
+    inicio = datetime(2024, 7, 15)
+    corte = datetime(2026, 7, 15)
+    base = 2_249_095
+    total, detalle = _calcular_intereses_cesantias_periodizados(base, inicio, corte)
+    dias_total = _dias_360(inicio, corte)
+    cesantias_acumuladas = base * dias_total / 360
+    formula_incorrecta_acumulada = cesantias_acumuladas * 0.12 * dias_total / 360
+    assert len(detalle) == 3
+    assert sum(x["dias"] for x in detalle) == dias_total
+    assert total < formula_incorrecta_acumulada
+    assert total == round(sum(x["intereses_periodo"] for x in detalle), 2)
+
+
+def test_intereses_pagados_reducen_solo_el_saldo_pendiente():
+    fila = _fila_test(fecha_ingreso="01/01/2026")
+    fila["Intereses cesantias pagados"] = 50_000
+    resultado = calcular_liquidacion_fila(fila, datetime(2026, 7, 1), motivo_retiro="renuncia")
+    assert resultado["Intereses cesantias causados"] > 50_000
+    assert resultado["Intereses cesantias 12% (Ley 52/75)"] == round(
+        resultado["Intereses cesantias causados"] - 50_000, 2
+    )

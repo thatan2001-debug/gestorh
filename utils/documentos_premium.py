@@ -202,14 +202,23 @@ def _tabla_datos(pares: Iterable[tuple[str, object]], estilos: dict, paleta: dic
 
 
 def _firma(empresa: dict, empleado: dict | None, estilos: dict, paleta: dict,
-           incluir_empleado: bool, estado_firma: str = "pendiente") -> KeepTogether:
+           incluir_empleado: bool, estado_firma: str = "pendiente",
+           compacto: bool = False) -> KeepTogether:
     rep = empresa.get("representante", "")
     cargo = empresa.get("cargo_firmante", "Representante Legal")
     firma_path = _get(empresa, "firma_path", "firma_digitalizada_path")
     firma_valida = bool(firma_path and Path(str(firma_path)).exists())
     nota_estado = "Firma digitalizada incorporada por usuario autorizado." if firma_valida else "Documento pendiente de firma."
-    style_nombre = ParagraphStyle("FirmaNombrePremium", parent=estilos["firma_nombre"], fontSize=9.2, leading=11)
-    style_cargo = ParagraphStyle("FirmaCargoPremium", parent=estilos["firma_cargo"], fontSize=8.1, leading=9.5)
+    style_nombre = ParagraphStyle(
+        "FirmaNombrePremiumCompacta" if compacto else "FirmaNombrePremium",
+        parent=estilos["firma_nombre"], fontSize=8.7 if compacto else 9.2,
+        leading=9.8 if compacto else 11,
+    )
+    style_cargo = ParagraphStyle(
+        "FirmaCargoPremiumCompacta" if compacto else "FirmaCargoPremium",
+        parent=estilos["firma_cargo"], fontSize=7.7 if compacto else 8.1,
+        leading=8.5 if compacto else 9.5,
+    )
 
     def bloque(nombre: str, subtitulo: str, extra: str = ""):
         elementos = []
@@ -219,9 +228,9 @@ def _firma(empresa: dict, empleado: dict | None, estilos: dict, paleta: dict,
                 img.hAlign = "LEFT"
                 elementos.append(img)
             except Exception:
-                elementos.append(Spacer(1, 0.35*cm))
+                elementos.append(Spacer(1, 0.12*cm if compacto else 0.35*cm))
         else:
-            elementos.append(Spacer(1, 0.35*cm))
+            elementos.append(Spacer(1, 0.12*cm if compacto else 0.35*cm))
         elementos.extend([
             Table([[""]], colWidths=[6.5*cm], rowHeights=[1], style=TableStyle([("LINEABOVE", (0,0), (-1,-1), .65, paleta["primario"])])),
             Paragraph(f"<b>{_txt(nombre) or 'Firma pendiente'}</b>", style_nombre),
@@ -231,7 +240,7 @@ def _firma(empresa: dict, empleado: dict | None, estilos: dict, paleta: dict,
             elementos.append(Paragraph(_txt(extra), style_cargo))
         return elementos
 
-    izquierda = bloque(rep, cargo, empresa.get("nombre", ""))
+    izquierda = bloque(rep, cargo, "" if compacto else empresa.get("nombre", ""))
     if incluir_empleado and empleado:
         derecha = bloque(empleado.get("nombre", ""), f"{empleado.get('tipo_documento','C.C.')} {empleado.get('documento','')}")
         tabla = Table([[izquierda, derecha]], colWidths=[7.5*cm, 7.5*cm])
@@ -244,8 +253,13 @@ def _firma(empresa: dict, empleado: dict | None, estilos: dict, paleta: dict,
         ("TOPPADDING", (0,0), (-1,-1), 0),
         ("BOTTOMPADDING", (0,0), (-1,-1), 0),
     ]))
-    estado = Paragraph(f"<b>Estado de firma:</b> {_txt(nota_estado)}", estilos["nota"])
-    return KeepTogether([tabla, Spacer(1, 4), estado])
+    estilo_estado = ParagraphStyle(
+        "EstadoFirmaCompacto" if compacto else "EstadoFirma",
+        parent=estilos["nota"], fontSize=7.4 if compacto else estilos["nota"].fontSize,
+        leading=8.5 if compacto else estilos["nota"].leading, spaceBefore=0, spaceAfter=0,
+    )
+    estado = Paragraph(f"<b>Estado de firma:</b> {_txt(nota_estado)}", estilo_estado)
+    return KeepTogether([tabla, Spacer(1, 2 if compacto else 4), estado])
 
 
 def _build(ruta: str, titulo: str, tipo: str, empleado_raw: dict, empresa_raw: dict,
@@ -485,7 +499,7 @@ def generar_dotacion_premium(empleado_raw: dict, empresa_raw: dict, ruta: str,
             Paragraph(_txt(item.get("cantidad", 1)), cell), Paragraph(_txt(item.get("estado", "Nuevo")), cell),
             Paragraph(_txt(item.get("observaciones")) or "—", cell),
         ])
-    widths = [0.55*cm, 1.65*cm, 4.3*cm, 1.75*cm, 2.25*cm, 0.8*cm, 1.35*cm, 3.25*cm]
+    widths = [0.55*cm, 1.6*cm, 4.2*cm, 1.7*cm, 2.15*cm, 1.0*cm, 1.3*cm, 3.4*cm]
     def _crear_tabla_dotacion(filas_tabla):
         tabla_local = Table(filas_tabla, colWidths=widths, repeatRows=1, splitByRow=1, hAlign="LEFT")
         tabla_local.setStyle(TableStyle([
@@ -567,7 +581,7 @@ def generar_liquidacion_premium(resultado: dict, empresa_raw: dict, ruta: str,
     conceptos = [
         ("Salario pendiente", resultado.get("Periodo salario inicio", "—"), resultado.get("Fecha corte", "—"), resultado.get("Dias salario pendiente", 0), resultado.get("Salario base", 0), "salario / 30 × días", resultado.get("Salario pendiente (estimado)", 0)),
         ("Cesantías", resultado.get("Fecha ingreso", "—"), resultado.get("Fecha corte", "—"), dias_total, base_prestacional, "base × días / 360", resultado.get("Cesantias (Art. 249 CST)", 0)),
-        ("Intereses de cesantías", resultado.get("Fecha ingreso", "—"), resultado.get("Fecha corte", "—"), dias_total, resultado.get("Cesantias (Art. 249 CST)", 0), "cesantías × 12% × días / 360", resultado.get("Intereses cesantias 12% (Ley 52/75)", 0)),
+        ("Intereses de cesantías", "Periodos anuales", resultado.get("Fecha corte", "—"), resultado.get("Dias intereses cesantias", dias_total), base_prestacional, "suma anual proporcional − pagos", resultado.get("Intereses cesantias 12% (Ley 52/75)", 0)),
         ("Prima de servicios", resultado.get("Inicio periodo prima", "—"), resultado.get("Fecha corte", "—"), dias_prima, base_prestacional, "base × días / 360", resultado.get("Prima semestral (Art. 306 CST)", 0)),
         ("Vacaciones", resultado.get("Fecha ingreso", "—"), resultado.get("Fecha corte", "—"), dias_total, base_vacaciones, "salario × días / 720", resultado.get("Vacaciones (Art. 186 CST)", 0)),
     ]
@@ -612,6 +626,10 @@ def generar_liquidacion_premium(resultado: dict, empresa_raw: dict, ruta: str,
     ]))
     advertencias = [h.mensaje for h in hallazgos if h.nivel == Nivel.ADVERTENCIA]
     advertencias.extend(resultado.get("Advertencias", []) or [])
+    if val_config["pagos_previos_confirmados"] and val_config["novedades_confirmadas"]:
+        estado_revision = "Pagos previos y novedades confirmados por el usuario."
+    else:
+        estado_revision = "Existen confirmaciones pendientes antes de aprobar."
     elementos = [
         _seccion("Datos generales", estilos, paleta),
         _tabla_datos([
@@ -632,13 +650,13 @@ def generar_liquidacion_premium(resultado: dict, empresa_raw: dict, ruta: str,
         _seccion("Detalle por concepto", estilos, paleta), tabla, Spacer(1, 6), resumen,
         _seccion("Resumen de validación", estilos, paleta),
         Paragraph(
-            "Cálculo generado con base en los datos y novedades registradas. Verifique las excepciones antes de aprobar. "
+            "Cálculo generado con base en los datos y novedades registradas. " + estado_revision + " "
             + ("<b>Advertencias:</b> " + " | ".join(_txt(x) for x in advertencias) + ". " if advertencias else "")
             + "La recepción del documento y de los valores registrados no implica renuncia a derechos ciertos e indiscutibles ni impide ajustes por información omitida o corregida.",
             ParagraphStyle("ValidacionLiquidacion", parent=estilos["nota"], fontSize=8.0, leading=9.6,
                            textColor=paleta["texto"], spaceBefore=0, spaceAfter=2),
         ),
-        _firma(empresa, empleado, estilos, paleta, incluir_empleado=True),
+        _firma(empresa, empleado, estilos, paleta, incluir_empleado=True, compacto=True),
     ]
     return _build(ruta, "LIQUIDACIÓN DE PRESTACIONES SOCIALES", "liquidacion",
                   empleado_raw, empresa_raw, elementos, "compacto", disenio,
