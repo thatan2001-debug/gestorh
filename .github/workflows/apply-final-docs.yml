@@ -42,3 +42,5 @@ jobs:
           git add -A
           git commit -m 'feat: finalize corporate HR documents and acceptance PDFs'
           git push origin HEAD:feature/documentos-finales-20260730
+
+# Triggered after payload verification setup.
