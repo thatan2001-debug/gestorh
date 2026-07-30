@@ -18,10 +18,10 @@ embargos, licencias, comisiones variables, horas extras ni mora.
 from datetime import datetime, date
 import pandas as pd
 
-# ── Valores oficiales 2026 ──────────────────────────────────────────────────
-SALARIO_MINIMO_2026 = 1_750_905
-AUXILIO_TRANSPORTE_2026 = 249_095
-TOPE_AUXILIO_TRANSPORTE = SALARIO_MINIMO_2026 * 2   # 2 SMMLV = $3.501.810
+from utils.parametros_legales import (
+    obtener_parametros, SALARIO_MINIMO_2026, AUXILIO_TRANSPORTE_2026,
+    TOPE_AUXILIO_TRANSPORTE,
+)
 
 TIPOS_CONTRATO_FIJO = {"fijo", "término fijo", "termino fijo", "a término fijo"}
 
@@ -74,6 +74,63 @@ def _dias_360(fecha_ingreso: datetime, fecha_corte: datetime) -> int:
     total = (dc.year - di.year) * 360 + (dc.month - di.month) * 30 + (d2 - d1)
     return max(total, 0)
 
+
+
+def _periodos_intereses_cesantias(fecha_ingreso: datetime, fecha_corte: datetime) -> list[dict]:
+    """
+    Divide el tiempo trabajado en periodos por año calendario usando la misma
+    convención 30/360 del motor. La suma de los periodos coincide exactamente
+    con ``_dias_360(fecha_ingreso, fecha_corte)`` y evita aplicar la tasa a un
+    saldo acumulado de varios años como si fuera un solo periodo.
+    """
+    if fecha_corte < fecha_ingreso:
+        return []
+
+    total = _dias_360(fecha_ingreso, fecha_corte)
+    periodos = []
+    acumulado_anterior = 0
+    for anio in range(fecha_ingreso.year, fecha_corte.year + 1):
+        fin_periodo = fecha_corte if anio == fecha_corte.year else datetime(anio, 12, 31)
+        acumulado = min(_dias_360(fecha_ingreso, fin_periodo), total)
+        dias = max(acumulado - acumulado_anterior, 0)
+        if dias:
+            inicio = fecha_ingreso if anio == fecha_ingreso.year else datetime(anio, 1, 1)
+            periodos.append({
+                "anio": anio,
+                "inicio": inicio,
+                "fin": fin_periodo,
+                "dias": dias,
+            })
+        acumulado_anterior = acumulado
+    return periodos
+
+
+def _calcular_intereses_cesantias_periodizados(
+    base_prestacional: float,
+    fecha_ingreso: datetime,
+    fecha_corte: datetime,
+    porcentaje: float = 0.12,
+    divisor: int = 360,
+) -> tuple[float, list[dict]]:
+    """Calcula intereses de cesantías por cada año o fracción anual.
+
+    Para cada periodo: cesantías causadas del periodo × 12 % × días / 360.
+    El resultado no incluye sanciones por consignación tardía ni intereses de
+    mora; esas excepciones requieren un cálculo separado y revisión jurídica.
+    """
+    detalle = []
+    total_intereses = 0.0
+    for periodo in _periodos_intereses_cesantias(fecha_ingreso, fecha_corte):
+        dias = periodo["dias"]
+        cesantias_periodo = round(base_prestacional * dias / divisor, 2)
+        intereses_periodo = round(cesantias_periodo * porcentaje * dias / divisor, 2)
+        total_intereses += intereses_periodo
+        detalle.append({
+            **periodo,
+            "cesantias_periodo": cesantias_periodo,
+            "intereses_periodo": intereses_periodo,
+        })
+    return round(total_intereses, 2), detalle
 
 def _dias_semestre_actual(fecha_ingreso: datetime, fecha_corte: datetime) -> int:
     """
@@ -232,7 +289,13 @@ def calcular_liquidacion_fila(
     fecha_ingreso = _parsear_fecha(fila.get("Fecha ingreso"))
     fecha_retiro_raw = fila.get("Fecha retiro")
     fecha_retiro_parsed = _parsear_fecha(fecha_retiro_raw)
-    fecha_corte = fecha_retiro_parsed or fecha_corte_default or datetime.today()
+    fecha_corte = fecha_retiro_parsed or fecha_corte_default
+    if fecha_corte is None:
+        raise ValueError(
+            f"'{nombre}': falta la Fecha de retiro o una fecha de corte confirmada. "
+            "No se asigna la fecha actual de forma implícita."
+        )
+    fecha_corte = _parsear_fecha(fecha_corte)
 
     if fecha_ingreso is None:
         raise ValueError(
@@ -244,31 +307,42 @@ def calcular_liquidacion_fila(
             f"es anterior a la Fecha de ingreso ({fecha_ingreso.date()})."
         )
 
+    parametros = obtener_parametros(fecha_corte.year)
+
     # ── Días trabajados ────────────────────────────────────────────────────
     dias_total = _dias_360(fecha_ingreso, fecha_corte)
     dias_semestre = _dias_semestre_actual(fecha_ingreso, fecha_corte)
 
     # ── Bases de cálculo ───────────────────────────────────────────────────
     # Auxilio de transporte: incluye en base prestacional solo si salario ≤ 2 SMMLV
-    aplica_auxilio = salario <= TOPE_AUXILIO_TRANSPORTE
-    auxilio = AUXILIO_TRANSPORTE_2026 if aplica_auxilio else 0
+    aplica_auxilio = salario <= parametros.tope_auxilio_transporte
+    auxilio = parametros.auxilio_transporte if aplica_auxilio else 0
     base_prestacional = salario + auxilio   # Para cesantías y prima
 
     # ── Fórmulas CST ──────────────────────────────────────────────────────
     # Cesantías: Art. 249 CST — base prestacional × días totales / 360
-    cesantias = round(base_prestacional * dias_total / 360, 2)
+    cesantias = round(base_prestacional * dias_total / parametros.divisor_prestaciones, 2)
 
-    # Intereses cesantías: Ley 52/1975 — 12% anual proporcional
-    intereses_cesantias = round(cesantias * 0.12 * dias_total / 360, 2)
+    # Intereses de cesantías: se periodizan por año calendario. Aplicar la
+    # tasa a las cesantías acumuladas de varios años y volver a multiplicar por
+    # todos los días sobrestima el resultado.
+    intereses_cesantias_brutos, detalle_intereses = _calcular_intereses_cesantias_periodizados(
+        base_prestacional, fecha_ingreso, fecha_corte,
+        porcentaje=parametros.porcentaje_intereses_cesantias,
+        divisor=parametros.divisor_prestaciones,
+    )
 
     # Prima: Art. 306 CST — por SEMESTRE (no año completo)
-    prima = round(base_prestacional * dias_semestre / 360, 2)
+    prima = round(base_prestacional * dias_semestre / parametros.divisor_prestaciones, 2)
 
     # Vacaciones: Art. 186 CST — solo salario base (sin auxilio), divisor 720
-    vacaciones = round(salario * dias_total / 720, 2)
+    vacaciones = round(salario * dias_total / parametros.divisor_vacaciones, 2)
 
-    # Salario pendiente: días del mes en curso no pagados (estimado simple)
-    dias_mes_pendiente = min(fecha_corte.day, 30)
+    # Salario pendiente: solo se incluye cuando el usuario registra los días.
+    # Antes se asumía todo el mes transcurrido, lo que podía duplicar nómina ya pagada.
+    dias_mes_pendiente = int(fila.get("Dias salario pendiente", 0) or 0)
+    if dias_mes_pendiente < 0 or dias_mes_pendiente > 30:
+        raise ValueError(f"'{nombre}': los días de salario pendiente deben estar entre 0 y 30.")
     salario_pendiente = round(salario / 30 * dias_mes_pendiente, 2)
 
     # Indemnización: Art. 64 CST — según motivo de retiro
@@ -296,8 +370,30 @@ def calcular_liquidacion_fila(
         indem_articulo = "N/A"
         indem_detalle = "Sin indemnización según causal"
 
-    subtotal_prestaciones = round(cesantias + intereses_cesantias + prima + vacaciones, 2)
-    total = round(subtotal_prestaciones + salario_pendiente + indem, 2)
+    # Pagos previos y deducciones se registran explícitamente; nunca se descuenta
+    # salud/pensión sobre el total de prestaciones o indemnizaciones.
+    prima_pagada = float(fila.get("Prima pagada", 0) or 0)
+    cesantias_consignadas = float(fila.get("Cesantias consignadas", 0) or 0)
+    vacaciones_pagadas = float(fila.get("Vacaciones pagadas", 0) or 0)
+    intereses_cesantias_pagados = float(fila.get("Intereses cesantias pagados", 0) or 0)
+    deducciones_autorizadas = float(fila.get("Deducciones autorizadas", 0) or 0)
+    for etiqueta, valor in (
+        ("Prima pagada", prima_pagada),
+        ("Cesantías consignadas", cesantias_consignadas),
+        ("Vacaciones pagadas", vacaciones_pagadas),
+        ("Intereses de cesantías pagados", intereses_cesantias_pagados),
+        ("Deducciones autorizadas", deducciones_autorizadas),
+    ):
+        if valor < 0:
+            raise ValueError(f"'{nombre}': {etiqueta} no puede ser negativo.")
+
+    cesantias_pendientes = max(cesantias - cesantias_consignadas, 0)
+    intereses_cesantias = round(max(intereses_cesantias_brutos - intereses_cesantias_pagados, 0), 2)
+    prima_pendiente = max(prima - prima_pagada, 0)
+    vacaciones_pendientes = max(vacaciones - vacaciones_pagadas, 0)
+    subtotal_prestaciones = round(cesantias_pendientes + intereses_cesantias + prima_pendiente + vacaciones_pendientes, 2)
+    total_devengado = round(subtotal_prestaciones + salario_pendiente + indem, 2)
+    total = round(total_devengado - deducciones_autorizadas, 2)
 
     return {
         # Identificación
@@ -313,24 +409,53 @@ def calcular_liquidacion_fila(
         "Dias semestre actual (prima)": dias_semestre,
         # Base
         "Auxilio transporte incluido": "Sí" if aplica_auxilio else "No",
+        "Auxilio transporte valor": auxilio,
         "Base prestacional (salario + auxilio)": base_prestacional if aplica_auxilio else salario,
+        "Base vacaciones": salario,
         # Conceptos
         "Cesantias (Art. 249 CST)": cesantias,
+        "Intereses cesantias causados": intereses_cesantias_brutos,
+        "Intereses cesantias pagados": intereses_cesantias_pagados,
         "Intereses cesantias 12% (Ley 52/75)": intereses_cesantias,
+        "Dias intereses cesantias": sum(x["dias"] for x in detalle_intereses),
+        "Detalle periodos intereses": [
+            {
+                "anio": x["anio"],
+                "inicio": x["inicio"].strftime("%d/%m/%Y"),
+                "fin": x["fin"].strftime("%d/%m/%Y"),
+                "dias": x["dias"],
+                "cesantias": x["cesantias_periodo"],
+                "intereses": x["intereses_periodo"],
+            }
+            for x in detalle_intereses
+        ],
         "Prima semestral (Art. 306 CST)": prima,
         "Vacaciones (Art. 186 CST)": vacaciones,
+        "Dias salario pendiente": dias_mes_pendiente,
         "Salario pendiente (estimado)": salario_pendiente,
+        "Prima pagada": prima_pagada,
+        "Cesantias consignadas": cesantias_consignadas,
+        "Vacaciones pagadas": vacaciones_pagadas,
         "Indemnizacion (Art. 64 CST)": indem,
         "Indemnizacion dias": indem_dias,
         "Indemnizacion articulo": indem_articulo,
         "Indemnizacion detalle": indem_detalle,
         # Total
         "Subtotal prestaciones": subtotal_prestaciones,
+        "TOTAL DEVENGADO": total_devengado,
+        "TOTAL DEDUCCIONES AUTORIZADAS": deducciones_autorizadas,
+        "NETO A PAGAR": total,
         "TOTAL LIQUIDACION ESTIMADA": total,
         # Meta
         "Motivo retiro": motivo_lower,  # ya normalizado (minúsculas, sin espacios)
         "Genera indemnizacion": genera_indem,
-        "Referencia legal": "CST + Decretos 1469/2025 y 159/2026 — SMMLV $1.750.905",
+        "Version reglas": parametros.version,
+        "Metodo dias": "Año comercial 360; vacaciones divisor 720",
+        "Referencia legal": f"CST + {parametros.fuente_salario} + {parametros.fuente_auxilio}",
+        "Advertencias": [
+            "No se aplicaron descuentos de salud o pensión sobre prestaciones e indemnizaciones.",
+            "Los intereses de cesantías se periodizaron por año; no incluyen sanciones ni mora.",
+        ],
     }
 
 

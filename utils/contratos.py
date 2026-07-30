@@ -663,3 +663,15 @@ def _num_romano(n: int) -> str:
     """Convierte 1-10 a números romanos para las cláusulas."""
     romanos = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"]
     return romanos[n] if 0 < n < len(romanos) else str(n)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CONTRATO INDEFINIDO PREMIUM 2.1 — numeración dinámica y control documental
+# ══════════════════════════════════════════════════════════════════════════════
+def generar_contrato_indefinido(empleado, datos_empresa, ruta_salida, config,
+                                disenio=1, usar_marca_agua=False,
+                                membrete_path=None, usar_logo_enc=True):
+    from utils.documentos_premium import generar_contrato_indefinido_premium
+    return generar_contrato_indefinido_premium(
+        empleado, datos_empresa, ruta_salida, config,
+        disenio=disenio, usar_marca_agua=usar_marca_agua,
+    )

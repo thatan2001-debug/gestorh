@@ -1,0 +1,64 @@
+name: Documentos premium
+
+on:
+  push:
+    branches:
+      - main
+      - feature/documentos-premium-20260730
+    paths:
+      - 'utils/**'
+      - 'scripts/generar_muestras_documentales.py'
+      - 'scripts/preflight_pdfs.py'
+      - 'tests/**'
+      - '.github/workflows/documentos-premium.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'utils/**'
+      - 'scripts/generar_muestras_documentales.py'
+      - 'scripts/preflight_pdfs.py'
+      - 'tests/**'
+      - '.github/workflows/documentos-premium.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test-render-preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pymupdf
+
+      - name: Run complete test suite
+        run: pytest -q --junitxml=artifacts/pytest-results.xml
+
+      - name: Generate the four reference PDFs
+        run: python scripts/generar_muestras_documentales.py
+
+      - name: Render and inspect every PDF page
+        run: python scripts/preflight_pdfs.py
+
+      - name: Upload PDFs, renders and test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentos-premium-${{ github.sha }}
+          path: |
+            artifacts/documentos_finales/
+            artifacts/renders/
+            artifacts/preflight.json
+            artifacts/pytest-results.xml
+          retention-days: 14
