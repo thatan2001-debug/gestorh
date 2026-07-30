@@ -352,7 +352,56 @@ def pantalla_generar(usuario: dict, datos_empresa: dict):
     with c_desc:
         descargar = st.checkbox("⬇️ Descargar ZIP", value=True)
 
+    st.markdown("#### Verifica la información del documento")
+    st.caption("Revisa trabajador, identificación, fechas críticas, salario, cargo, estado laboral, empresa y firmante antes de generar.")
+    from utils.validaciones_documentales import validar_documento, Nivel
+    mapa_validacion = {
+        "contrato_indefinido": "contrato_indefinido",
+        "certificado_con_salario": "certificado",
+        "certificado_sin_salario": "certificado",
+        "entrega_dotacion": "dotacion",
+        "liquidacion_prestaciones": "liquidacion",
+    }
+    errores_revision = []
+    for doc_id, item_revision in carrito.items():
+        emp_revision = item_revision["empleado"]
+        cfg_revision = item_revision["config"]
+        tipo_revision = mapa_validacion.get(tipo_seleccionado)
+        if not tipo_revision:
+            continue
+        if tipo_revision == "certificado":
+            cfg_revision = {**cfg_revision, "incluir_salario": tipo_seleccionado == "certificado_con_salario"}
+        hallazgos = validar_documento(tipo_revision, emp_revision, datos_empresa, cfg_revision)
+        with st.expander(f"{emp_revision.get('nombre','Trabajador')} · {doc_id}", expanded=bool(hallazgos)):
+            st.write({
+                "Trabajador": emp_revision.get("nombre",""),
+                "Identificación": doc_id,
+                "Fecha de ingreso": emp_revision.get("fecha_ingreso",""),
+                "Fecha de inicio contractual": cfg_revision.get("fecha_inicio_contrato","No aplica"),
+                "Fecha de retiro/corte": cfg_revision.get("fecha_corte", emp_revision.get("fecha_retiro","")),
+                "Salario": cfg_revision.get("salario_base", emp_revision.get("salario",0)),
+                "Cargo": emp_revision.get("cargo",""),
+                "Empresa": datos_empresa.get("nombre",""),
+                "Representante": datos_empresa.get("representante","") or "Pendiente de firma",
+            })
+            for h in hallazgos:
+                if h.nivel == Nivel.ERROR:
+                    st.error(f"{h.codigo}: {h.mensaje}"); errores_revision.append(h.mensaje)
+                elif h.nivel == Nivel.ADVERTENCIA:
+                    st.warning(f"{h.codigo}: {h.mensaje}")
+                else:
+                    st.info(h.mensaje)
+    revision_confirmada = st.checkbox(
+        "Confirmo que revisé los datos y las advertencias mostradas",
+        key=f"confirmar_revision_{tipo_seleccionado}")
+
     if st.button("🚀 Generar documentos", type="primary", use_container_width=True):
+        if errores_revision:
+            st.error("Corrige los errores de validación antes de generar.")
+            st.stop()
+        if not revision_confirmada:
+            st.error("Debes confirmar la revisión de datos y advertencias.")
+            st.stop()
         archivos = _ejecutar_generacion_unificada(
             email, datos_empresa, carrito, tipo_seleccionado,
             usuario.get("plan","gratuito"), enviar, descargar
@@ -441,7 +490,7 @@ def _mostrar_config_global(tipo_doc: str, carrito: dict):
     elif tipo_doc == "liquidacion_prestaciones":
         c1, c2 = st.columns(2)
         with c1:
-            fc = st.date_input("Fecha de corte", date.today(), key="cfg_fc_liq")
+            fc = st.date_input("Fecha efectiva de terminación o corte *", date.today(), key="cfg_fc_liq")
         with c2:
             MOTIVOS = {
                 "renuncia":                "Renuncia voluntaria (sin indemnización)",
@@ -480,10 +529,35 @@ def _mostrar_config_global(tipo_doc: str, carrito: dict):
         elif motivo == "vencimiento_contrato":
             st.info("ℹ️ Requiere preaviso de 30 días. Sin preaviso, se prorroga automáticamente.")
 
+        st.markdown("**Confirmaciones previas del cálculo:**")
+        c3, c4 = st.columns(2)
+        with c3:
+            pagos_previos_ok = st.checkbox(
+                "Confirmé prima, cesantías y vacaciones pagadas previamente",
+                key="cfg_pagos_previos_ok")
+            dias_salario_pendiente = st.number_input(
+                "Días de salario realmente pendientes",
+                min_value=0, max_value=30, step=1, value=0,
+                help="No se asumen automáticamente los días transcurridos del mes.",
+                key="cfg_dias_salario_pendiente")
+        with c4:
+            novedades_ok = st.checkbox(
+                "Confirmé novedades, licencias, suspensiones y cambios salariales",
+                key="cfg_novedades_ok")
+            actualizar_estado = st.checkbox(
+                "Actualizar ficha y marcar al trabajador como retirado al generar",
+                value=False, key="cfg_actualizar_estado_retiro")
+
         for doc_e in carrito:
-            carrito[doc_e]["config"]["fecha_corte"]    = fc
-            carrito[doc_e]["config"]["motivo_retiro"]  = motivo
-            carrito[doc_e]["config"]["dias_pendientes"] = dias_pendientes
+            carrito[doc_e]["config"].update({
+                "fecha_corte": fc,
+                "motivo_retiro": motivo,
+                "dias_pendientes": dias_pendientes,
+                "pagos_previos_confirmados": pagos_previos_ok,
+                "novedades_confirmadas": novedades_ok,
+                "dias_salario_pendiente": dias_salario_pendiente,
+                "actualizar_estado_empleado": actualizar_estado,
+            })
 
     elif tipo_doc == "paz_salvo":
         obs = st.text_area("Observaciones (opcional)", key="cfg_obs_ps",
@@ -660,34 +734,64 @@ def _mostrar_config_global(tipo_doc: str, carrito: dict):
 
     # ── Entrega de dotación ──────────────────────────────────────────────
     elif tipo_doc == "entrega_dotacion":
-        fecha_ent = st.date_input("Fecha de entrega *",
-            value=date.today(), key="cfg_fecha_entrega_dot")
+        c1, c2 = st.columns(2)
+        with c1:
+            fecha_ent = st.date_input("Fecha efectiva de entrega *",
+                value=date.today(), key="cfg_fecha_entrega_dot")
+            tipo_entrega = st.selectbox("Tipo de entrega *", [
+                "dotacion_legal", "entrega_voluntaria", "uniforme_corporativo",
+                "herramienta_trabajo", "epp", "otro",
+            ], format_func=lambda x: {
+                "dotacion_legal":"Dotación legal", "entrega_voluntaria":"Entrega voluntaria anticipada",
+                "uniforme_corporativo":"Uniforme corporativo", "herramienta_trabajo":"Herramienta de trabajo",
+                "epp":"Elemento de protección personal", "otro":"Otro tipo de entrega",
+            }[x], key="cfg_tipo_entrega_dot")
+        with c2:
+            lugar_entrega = st.text_input("Lugar de entrega",
+                value=st.session_state.get("datos_empresa",{}).get("ciudad","Colombia"),
+                key="cfg_lugar_entrega_dot")
+            periodo_entrega = st.text_input("Periodo de entrega",
+                placeholder="Ej: segundo cuatrimestre de 2026", key="cfg_periodo_dot")
 
-        st.markdown("**Items entregados:**")
-        st.caption("Agrega uno o más items separados por línea nueva.")
+        cumple_requisitos = False
+        if tipo_entrega == "dotacion_legal":
+            st.warning("La referencia al Art. 230 CST solo se incluirá después de confirmar los requisitos parametrizados.")
+            cumple_requisitos = st.checkbox(
+                "Confirmo salario dentro del tope, tiempo mínimo y periodo aplicable",
+                key="cfg_cumple_dotacion")
+
+        st.markdown("**Elementos entregados:**")
+        st.caption("Una línea por elemento: descripción | tipo | talla | color | marca/referencia | cantidad | estado | observaciones")
         items_texto = st.text_area(
-            "Lista de items (uno por línea, formato: `descripción | cantidad | estado`)",
-            placeholder="Camisa polo con logo | 3 | Nuevo\nPantalón dril azul | 2 | Nuevo\nZapato de seguridad | 1 | Nuevo",
-            key="cfg_items_dot", height=120)
-        obs_dot = st.text_input("Observaciones (opcional)", key="cfg_obs_dot")
+            "Lista de elementos",
+            placeholder="Camisa polo con logo | Uniforme | M | Azul | Ref. CP-01 | 3 | Nuevo | Sin novedad\nZapato de seguridad | EPP | 40 | Negro | Ref. ZS-10 | 1 | Nuevo | Punta reforzada",
+            key="cfg_items_dot", height=140)
+        responsable_entrega = st.text_input("Responsable que entrega", key="cfg_responsable_dot")
+        obs_dot = st.text_input("Observaciones generales (opcional)", key="cfg_obs_dot")
 
-        # Parsear items
         items = []
         for linea in items_texto.strip().split("\n"):
-            if "|" in linea:
-                partes = [p.strip() for p in linea.split("|")]
-                if len(partes) >= 2:
-                    items.append({
-                        "descripcion": partes[0],
-                        "cantidad":    int(partes[1]) if partes[1].isdigit() else 1,
-                        "estado":      partes[2] if len(partes) >= 3 else "Nuevo",
-                    })
+            if not linea.strip():
+                continue
+            partes = [p.strip() for p in linea.split("|")]
+            partes += [""] * (8 - len(partes))
+            try:
+                cantidad = int(partes[5] or 1)
+            except ValueError:
+                cantidad = 1
+            items.append({
+                "descripcion": partes[0], "tipo": partes[1], "talla": partes[2],
+                "color": partes[3], "referencia": partes[4], "cantidad": cantidad,
+                "estado": partes[6] or "Nuevo", "observaciones": partes[7],
+            })
 
         for doc_e in carrito:
             carrito[doc_e]["config"].update({
-                "fecha_entrega": fecha_ent,
-                "items":         items,
-                "observaciones": obs_dot,
+                "fecha_entrega": fecha_ent, "tipo_entrega": tipo_entrega,
+                "cumple_requisitos_dotacion": cumple_requisitos,
+                "lugar_entrega": lugar_entrega, "periodo_entrega": periodo_entrega,
+                "responsable_entrega": responsable_entrega,
+                "items": items, "observaciones": obs_dot,
             })
 
     # ── Autorización de descuento ────────────────────────────────────────
@@ -721,69 +825,77 @@ def _mostrar_config_global(tipo_doc: str, carrito: dict):
     # ── Contratos laborales ──────────────────────────────────────────────
     elif tipo_doc in ("contrato_indefinido","contrato_fijo","contrato_obra","contrato_prestacion"):
         st.markdown("**Configuración del contrato:**")
+        emp_base = list(carrito.values())[0].get("empleado", {}) if carrito else {}
+        fecha_ingreso_raw = emp_base.get("fecha_ingreso") or emp_base.get("Fecha ingreso")
+        try:
+            fecha_propuesta = pd.to_datetime(fecha_ingreso_raw, dayfirst=True).date() if fecha_ingreso_raw else date.today()
+            fecha_precargada = True
+        except Exception:
+            fecha_propuesta = date.today()
+            fecha_precargada = True
+        st.info(f"Fecha de inicio propuesta: **{fecha_propuesta.strftime('%d/%m/%Y')}**. Debe revisarse antes de generar.")
         c1, c2 = st.columns(2)
         with c1:
-            fi_contrato = st.date_input("Fecha de inicio del contrato *",
-                value=date.today(), key="cfg_fi_contrato")
+            fi_contrato = st.date_input("Fecha real de inicio del contrato *",
+                value=fecha_propuesta, key="cfg_fi_contrato")
+            confirmar_inicio = st.checkbox(
+                "He verificado que esta es la fecha real de inicio del contrato",
+                key="cfg_confirmar_fi_contrato")
             lugar = st.text_input("Lugar de trabajo",
                 value=st.session_state.get("datos_empresa",{}).get("ciudad","Colombia"),
                 key="cfg_lugar")
+            modalidad_laboral = st.selectbox("Modalidad laboral",
+                ["Presencial", "Remota", "Híbrida"], key="cfg_modalidad_laboral")
         with c2:
-            if tipo_doc == "contrato_fijo":
+            if tipo_doc in ("contrato_fijo", "contrato_prestacion"):
                 ff_contrato = st.date_input("Fecha de terminación *",
-                    value=date.today(), key="cfg_ff_contrato",
-                    help="Máximo 4 años según Ley 2466/2025")
-            elif tipo_doc == "contrato_prestacion":
-                ff_contrato = st.date_input("Fecha de terminación *",
-                    value=date.today(), key="cfg_ff_contrato")
-            jornada = st.selectbox("Jornada",
-                ["Diurna","Nocturna","Mixta"], key="cfg_jornada")
+                    value=fecha_propuesta, key="cfg_ff_contrato")
+            jornada = st.selectbox("Jornada", ["Diurna","Nocturna","Mixta"], key="cfg_jornada")
+            horario = st.text_input("Horario", placeholder="Lunes a viernes de 8:00 a.m. a 5:00 p.m.", key="cfg_horario")
+            dia_descanso = st.text_input("Día de descanso", value="Domingo", key="cfg_descanso")
 
-        # Campos específicos por tipo de contrato
+        c3, c4, c5 = st.columns(3)
+        with c3:
+            periodicidad_pago = st.selectbox("Periodicidad de pago *", ["Mensual", "Quincenal"], key="cfg_periodicidad_pago")
+        with c4:
+            forma_pago_contrato = st.selectbox("Forma de pago *", ["Transferencia bancaria", "Efectivo", "Otro medio permitido"], key="cfg_forma_pago_contrato")
+        with c5:
+            dia_pago = st.text_input("Día(s) habitual(es) de pago *", placeholder="15 y 30", key="cfg_dia_pago")
+        funciones_contrato = st.text_area("Funciones principales (una por línea)",
+            placeholder="Gestionar solicitudes del área\nPreparar reportes mensuales\nCustodiar la información asignada",
+            key="cfg_funciones_contrato")
+
         if tipo_doc == "contrato_obra":
-            desc_obra = st.text_area("Descripción específica de la obra o labor *",
-                key="cfg_desc_obra",
-                placeholder="Ej: Construcción del muro perimetral del proyecto ABC, "
-                            "ubicado en la Cra 45 con Cll 30, con área de 120m²...",
-                help="Debe ser específica y determinada según Art. 46 CST")
+            desc_obra = st.text_area("Descripción específica de la obra o labor *", key="cfg_desc_obra")
         elif tipo_doc == "contrato_prestacion":
-            objeto = st.text_area("Objeto del contrato *",
-                key="cfg_objeto",
-                placeholder="Ej: Servicios profesionales de asesoría contable "
-                            "mensual para la empresa...")
-            c3, c4 = st.columns(2)
-            with c3:
-                honorarios = st.number_input("Honorarios mensuales ($) *",
-                    min_value=0.0, step=100000.0, key="cfg_honorarios")
-            with c4:
-                forma_pago = st.selectbox("Forma de pago", [
-                    "Mensual, contra entrega de factura o cuenta de cobro",
-                    "Quincenal, contra entrega de factura",
-                    "Único pago al finalizar el servicio",
-                ], key="cfg_forma_pago")
+            objeto = st.text_area("Objeto del contrato *", key="cfg_objeto")
+            honorarios = st.number_input("Honorarios mensuales ($) *", min_value=0.0, step=100000.0, key="cfg_honorarios")
+            forma_pago = st.selectbox("Forma de pago del servicio", [
+                "Mensual, contra entrega de factura o cuenta de cobro",
+                "Quincenal, contra entrega de factura", "Único pago al finalizar el servicio",
+            ], key="cfg_forma_pago")
 
+        per_prueba = False
         if tipo_doc in ("contrato_indefinido","contrato_fijo"):
-            per_prueba = st.checkbox("Incluir período de prueba de 2 meses (Art. 78 CST)",
-                value=True, key="cfg_periodo_prueba")
+            per_prueba = st.checkbox("Incluir período de prueba pactado por escrito", value=True, key="cfg_periodo_prueba")
 
-        # Guardar en el carrito
         for doc_e in carrito:
             cfg = carrito[doc_e]["config"]
-            cfg["fecha_inicio_contrato"] = fi_contrato
-            cfg["lugar_trabajo"] = lugar
-            cfg["jornada"] = jornada
-            if tipo_doc == "contrato_fijo":
+            cfg.update({
+                "fecha_inicio_contrato": fi_contrato,
+                "fecha_inicio_precargada": fecha_precargada,
+                "fecha_inicio_confirmada": confirmar_inicio,
+                "lugar_trabajo": lugar, "modalidad_laboral": modalidad_laboral,
+                "jornada": jornada, "horario": horario, "dia_descanso": dia_descanso,
+                "periodicidad_pago": periodicidad_pago, "forma_pago": forma_pago_contrato,
+                "dia_pago": dia_pago, "funciones": funciones_contrato,
+                "periodo_prueba": per_prueba,
+            })
+            if tipo_doc in ("contrato_fijo", "contrato_prestacion"):
                 cfg["fecha_fin_contrato"] = ff_contrato
-                cfg["periodo_prueba"] = per_prueba
-            elif tipo_doc == "contrato_indefinido":
-                cfg["periodo_prueba"] = per_prueba
-            elif tipo_doc == "contrato_obra":
-                cfg["descripcion_obra"] = desc_obra
-            elif tipo_doc == "contrato_prestacion":
-                cfg["fecha_fin_contrato"] = ff_contrato
-                cfg["objeto_contrato"]    = objeto
-                cfg["honorarios"]         = honorarios
-                cfg["forma_pago"]         = forma_pago
+            if tipo_doc == "contrato_obra": cfg["descripcion_obra"] = desc_obra
+            if tipo_doc == "contrato_prestacion":
+                cfg.update({"objeto_contrato": objeto, "honorarios": honorarios, "forma_pago_servicio": forma_pago})
 
     # ── Carta de terminación ─────────────────────────────────────────────
     elif tipo_doc == "carta_terminacion":
@@ -924,7 +1036,10 @@ def _ejecutar_generacion_unificada(
             elif tipo_doc == "liquidacion_prestaciones":
                 import pandas as pd
                 from utils.logs import log_info, log_error, log_debug, log_warn
-                fc = conf.get("fecha_corte", date.today())
+                fc = conf.get("fecha_corte")
+                if not fc:
+                    st.error("❌ Falta confirmar la fecha efectiva de corte.")
+                    continue
                 motivo_usado = conf.get("motivo_retiro", "renuncia")
                 dias_pend = int(conf.get("dias_pendientes", 0) or 0)
 
@@ -954,6 +1069,7 @@ def _ejecutar_generacion_unificada(
                     "Fecha retiro":  emp.get("fecha_retiro",""),
                     "Tipo contrato": emp.get("tipo_contrato","Indefinido"),
                     "Cuenta bancaria": emp.get("cuenta_bancaria",""),
+                    "Dias salario pendiente": conf.get("dias_salario_pendiente", 0),
                 })
                 fc_dt = datetime(fc.year, fc.month, fc.day)
 
@@ -1004,14 +1120,12 @@ def _ejecutar_generacion_unificada(
                     barra.progress((idx+1)/len(carrito), text=f"Error PDF en {nom}")
                     continue
 
-                # ── AUTO-UPDATE: guardar fecha de retiro y marcar como retirado ──
-                from utils.empleados_db import empleado_guardar
-                fecha_retiro_str = fc.strftime("%d/%m/%Y")
-                emp_actualizado = {**emp,
-                    "fecha_retiro": fecha_retiro_str,
-                    "activo":       False,   # marcarlo como retirado
-                }
-                empleado_guardar(email, emp_actualizado)
+                # Actualizar la ficha únicamente cuando el usuario lo confirmó.
+                if conf.get("actualizar_estado_empleado", False):
+                    from utils.empleados_db import empleado_guardar
+                    fecha_retiro_str = fc.strftime("%d/%m/%Y")
+                    emp_actualizado = {**emp, "fecha_retiro": fecha_retiro_str, "activo": False}
+                    empleado_guardar(email, emp_actualizado)
 
             elif tipo_doc == "paz_salvo":
                 ruta = str(SALIDAS / f"PazSalvo_{nb}.pdf")
@@ -1033,11 +1147,19 @@ def _ejecutar_generacion_unificada(
                     "_cargo_firmante": "Representante Legal",
                 }
                 config_contrato = {
-                    "fecha_inicio_contrato": conf.get("fecha_inicio_contrato", date.today()),
-                    "fecha_fin_contrato":    conf.get("fecha_fin_contrato", date.today()),
+                    "fecha_inicio_contrato": conf.get("fecha_inicio_contrato"),
+                    "fecha_inicio_precargada": conf.get("fecha_inicio_precargada", False),
+                    "fecha_inicio_confirmada": conf.get("fecha_inicio_confirmada", False),
+                    "fecha_fin_contrato":    conf.get("fecha_fin_contrato"),
                     "lugar_trabajo":         conf.get("lugar_trabajo",
                         datos_empresa.get("ciudad","Colombia")),
                     "jornada":               conf.get("jornada", "Diurna"),
+                    "modalidad_laboral":     conf.get("modalidad_laboral", "Presencial"),
+                    "horario":               conf.get("horario", ""),
+                    "dia_descanso":          conf.get("dia_descanso", ""),
+                    "periodicidad_pago":     conf.get("periodicidad_pago", ""),
+                    "forma_pago":            conf.get("forma_pago", ""),
+                    "dia_pago":              conf.get("dia_pago", ""),
                     "periodo_prueba":        conf.get("periodo_prueba", True),
                     "descripcion_obra":      conf.get("descripcion_obra",""),
                     "objeto_contrato":       conf.get("objeto_contrato",""),

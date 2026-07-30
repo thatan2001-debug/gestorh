@@ -994,3 +994,15 @@ def generar_autorizacion_descuento(empleado, datos_empresa, ruta_salida, config,
         disenio=disenio, usar_marca_agua=usar_marca_agua,
         membrete_path=membrete_path, usar_logo_enc=usar_logo_enc,
     )
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ACTA DE DOTACIÓN PREMIUM 2.1 — clasificación y tabla responsiva
+# ══════════════════════════════════════════════════════════════════════════════
+def generar_entrega_dotacion(empleado, datos_empresa, ruta_salida, config,
+                             disenio=1, usar_marca_agua=False,
+                             membrete_path=None, usar_logo_enc=True):
+    from utils.documentos_premium import generar_dotacion_premium
+    return generar_dotacion_premium(
+        empleado, datos_empresa, ruta_salida, config,
+        disenio=disenio, usar_marca_agua=usar_marca_agua,
+    )

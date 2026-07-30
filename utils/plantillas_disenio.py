@@ -1006,3 +1006,53 @@ def generar_paz_salvo(empleado: dict, datos_empresa: dict,
 
     _fn = lambda c,d: _pie(c, d, paleta, logo, usar_marca_agua, membrete_oficial_path=(datos_empresa.get("membrete_oficial_path") if datos_empresa.get("modo_generacion") == "solo_texto_membrete" else None))
     doc.build(el, onFirstPage=_fn, onLaterPages=_fn)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MOTOR DOCUMENTAL PREMIUM 2.1 — wrappers compatibles
+# ══════════════════════════════════════════════════════════════════════════════
+# Las definiciones siguientes reemplazan únicamente los cuatro documentos
+# críticos sin alterar las firmas públicas usadas por la interfaz existente.
+
+def generar_certificado(empleado: dict, datos_empresa: dict, ruta_salida: str,
+                         disenio: int = 1, usar_marca_agua: bool = False,
+                         membrete_path: str = None, usar_logo_enc: bool = True):
+    from utils.documentos_premium import generar_certificado_premium
+    retirado = bool(empleado.get("Fecha retiro") or empleado.get("fecha_retiro"))
+    return generar_certificado_premium(
+        empleado, datos_empresa, ruta_salida,
+        incluir_salario=not retirado,
+        disenio=disenio,
+        usar_marca_agua=usar_marca_agua,
+        config={"incluir_salario": not retirado},
+    )
+
+
+def generar_certificado_sin_salario(empleado: dict, datos_empresa: dict,
+                                     ruta_salida: str, disenio: int = 1,
+                                     usar_marca_agua: bool = False,
+                                     membrete_path: str = None,
+                                     usar_logo_enc: bool = True):
+    from utils.documentos_premium import generar_certificado_premium
+    return generar_certificado_premium(
+        empleado, datos_empresa, ruta_salida,
+        incluir_salario=False,
+        disenio=disenio,
+        usar_marca_agua=usar_marca_agua,
+        config={"incluir_salario": False},
+    )
+
+
+def generar_liquidacion(resultado: dict, datos_empresa: dict, ruta_salida: str,
+                         disenio: int = 1, usar_marca_agua: bool = False,
+                         membrete_path: str = None, firma_empleado: bool = True,
+                         usar_logo_enc: bool = True):
+    from utils.documentos_premium import generar_liquidacion_premium
+    return generar_liquidacion_premium(
+        resultado, datos_empresa, ruta_salida,
+        disenio=disenio,
+        usar_marca_agua=usar_marca_agua,
+        config={
+            "pagos_previos_confirmados": resultado.get("Pagos previos confirmados", False),
+            "novedades_confirmadas": resultado.get("Novedades confirmadas", False),
+        },
+    )

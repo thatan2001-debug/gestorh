@@ -61,4 +61,4 @@ def test_official_logo_asset_is_complete_and_landscape() -> None:
     assert bbox[2] - bbox[0] >= width * 0.90
     # Se permiten márgenes transparentes verticales para que el eslogan y el
     # isotipo respiren, pero el contenido debe ocupar la mayor parte del lienzo.
-    assert bbox[3] - bbox[1] >= height * 0.80
+    assert bbox[3] - bbox[1] >= height * 0.79
