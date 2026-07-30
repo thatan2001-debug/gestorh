@@ -148,19 +148,16 @@ def pantalla_auth():
         logo_marca = _P("assets/logo_gestorrh.png")
 
         if logo_marca.exists():
-            # Con logo real de la marca
-            st.markdown("<div style='text-align:center;padding:1.5rem 0 0.5rem'>",
+            # Logo GRANDE centrado. El tagline ya viene incluido en el logo,
+            # no lo repetimos abajo para no duplicar.
+            st.markdown("<div style='text-align:center;padding:1.5rem 0 1rem'>",
                           unsafe_allow_html=True)
-            _c1, _c2, _c3 = st.columns([1, 2, 1])
+            _c1, _c2, _c3 = st.columns([1, 4, 1])  # más ancho para el logo
             with _c2:
                 st.image(str(logo_marca), use_container_width=True)
-            st.markdown("""
-            <p style='color:#6B7280;margin:8px 0 0;text-align:center;font-size:0.95rem'>
-                Documentos laborales para PYMES colombianas
-            </p>
-            </div>""", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
         else:
-            # Fallback: emoji simple (como antes) si el logo no está subido
+            # Fallback: emoji simple + título si el logo no está subido
             st.markdown("""
             <div style='text-align:center;padding:2rem 0 1rem'>
                 <div style='font-size:2.5rem'>📄</div>

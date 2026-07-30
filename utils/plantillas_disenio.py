@@ -287,23 +287,46 @@ def _logo_platypus(logo_path: str, w: float, h: float, opacidad: float = 0.45):
 def _encabezado(el, datos_empresa, estilos, paleta, disenio,
                 logo_derecha: bool = True, membrete_path: str = None):
     """
-    Estructura real según imagen de referencia:
-    1. Logo en esquina superior derecha (tamaño generoso, semitrasp.)
-    2. Bloque de color ancho con Nombre + NIT en blanco debajo del logo
-    3. Pequeño espacio antes del título
+    Encabezado corporativo — AHORA delegado al sistema visual centralizado.
 
-    Si datos_empresa["modo_generacion"] == "solo_texto_membrete", saltamos
-    todo el encabezado — el membrete oficial se dibuja como fondo desde _pie.
+    Todos los documentos (certificados, contratos, liquidaciones, etc.)
+    usan el mismo diseño del nuevo sistema estilos_corporativos.py:
+    - Datos empresa a la IZQUIERDA
+    - Logo a la DERECHA
+    - Sin duplicaciones de tagline
     """
     # ── MODO "SOLO TEXTO SOBRE MEMBRETE" ─────────────────────────────
     if datos_empresa.get("modo_generacion") == "solo_texto_membrete":
         if datos_empresa.get("membrete_oficial_path"):
-            # Espacio superior para que el texto no se pegue al membrete
             el.append(Spacer(1, 20))
             return
-        # Si eligió el modo pero no subió membrete, seguir con encabezado normal
-        # como fallback (no dejar la página en blanco)
 
+    # ── Membrete personalizado (imagen) reemplaza el encabezado ─────
+    if membrete_path and Path(membrete_path).exists():
+        try:
+            img_elem = Image(membrete_path, width=ANCHO_UTIL, height=3.5*cm)
+            img_elem.hAlign = "CENTER"
+            el.append(img_elem)
+            el.append(HRFlowable(width="100%", thickness=1,
+                color=paleta["primario"], spaceAfter=8))
+            return
+        except Exception:
+            pass
+
+    # ── Delegar al sistema nuevo ─────────────────────────────────────
+    try:
+        from utils.estilos_corporativos import crear_encabezado_corporativo
+        elementos_nuevos = crear_encabezado_corporativo(
+            datos_empresa, paleta, perfil="normal"
+        )
+        for elem in elementos_nuevos:
+            el.append(elem)
+        return
+    except Exception:
+        # Si falla el sistema nuevo, seguir con el viejo (fallback)
+        pass
+
+    # ── LEGACY: Encabezado viejo (fallback si el nuevo falla) ────────
     nombre = datos_empresa.get("nombre", "")
     nit    = datos_empresa.get("nit", "")
     logo   = datos_empresa.get("logo_path") if logo_derecha else None

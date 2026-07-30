@@ -379,24 +379,6 @@ def crear_encabezado_corporativo(datos_empresa: dict, paleta: dict,
 
     elementos = []
 
-    # ─── MARCADOR DE VERSIÓN (verificación de despliegue) ─────────
-    # Este texto pequeño confirma que el sistema nuevo está activo.
-    # Si un PDF NO muestra "v2.0 rediseñado" en la esquina superior,
-    # significa que el código nuevo NO está corriendo en el servidor.
-    estilo_version = ParagraphStyle(
-        name="MarcadorVersion",
-        fontName=FUENTE_CURSIVA,
-        fontSize=6.5,
-        leading=8,
-        textColor=paleta["texto_suave"],
-        alignment=TA_RIGHT,
-    )
-    elementos.append(Paragraph(
-        "<font color='#9CA3AF'>v2.0 · rediseñado</font>",
-        estilo_version
-    ))
-    elementos.append(Spacer(1, 2))
-
     nombre = datos_empresa.get("nombre", "")
     nit = datos_empresa.get("nit", "")
     ciudad = datos_empresa.get("ciudad", "")
@@ -413,28 +395,28 @@ def crear_encabezado_corporativo(datos_empresa: dict, paleta: dict,
         logo_ancho_max = LOGO_MAX_ANCHO
         logo_alto_max = LOGO_MAX_ALTO
 
-    # ── Datos de la empresa (columna derecha) ─────────────────────
+    # ── Datos de la empresa — AHORA a la IZQUIERDA (alineados a la izquierda) ──
     tam_nombre = TAM_SUBTITULO if perfil == "compacto" else TAM_TITULO
     tam_datos = TAM_PEQUEÑO if perfil == "compacto" else TAM_CUERPO_MIN
 
-    # Estilo del nombre (grande, negrita, primario)
+    # Estilo del nombre (grande, negrita, primario) - AHORA a la izquierda
     estilo_nombre = ParagraphStyle(
         name="EmpresaNombre",
         fontName=FUENTE_NEGRITA,
         fontSize=tam_nombre,
         leading=tam_nombre * 1.15,
         textColor=paleta["primario"],
-        alignment=TA_RIGHT,
+        alignment=TA_LEFT,
     )
 
-    # Estilo de los datos secundarios (pequeño, gris)
+    # Estilo de los datos secundarios (pequeño, gris) - AHORA a la izquierda
     estilo_datos = ParagraphStyle(
         name="EmpresaDatos",
         fontName=FUENTE_REGULAR,
         fontSize=tam_datos,
         leading=tam_datos * 1.3,
         textColor=paleta["texto_suave"],
-        alignment=TA_RIGHT,
+        alignment=TA_LEFT,
     )
 
     # Construir el bloque de datos con solo lo que existe
@@ -455,25 +437,25 @@ def crear_encabezado_corporativo(datos_empresa: dict, paleta: dict,
     ]
     bloque_datos = [b for b in bloque_datos if b is not None]
 
-    # ── Logo (columna izquierda) ─────────────────────────────────
+    # ── Logo AHORA a la DERECHA ─────────────────────────────────
     if tiene_logo:
         try:
             w, h = calcular_dimensiones_logo(logo_path, logo_ancho_max, logo_alto_max)
             logo_img = Image(logo_path, width=w, height=h)
-            logo_img.hAlign = "LEFT"
+            logo_img.hAlign = "RIGHT"
 
-            # Tabla de 2 columnas: logo | datos
+            # Tabla de 2 columnas: DATOS (izq) | LOGO (der)
             ancho_col_logo = logo_ancho_max + 0.3 * cm
             ancho_col_datos = ancho_total - ancho_col_logo
 
             tabla = Table(
-                [[logo_img, bloque_datos]],
-                colWidths=[ancho_col_logo, ancho_col_datos],
+                [[bloque_datos, logo_img]],  # ← invertido: datos primero, logo después
+                colWidths=[ancho_col_datos, ancho_col_logo],
             )
             tabla.setStyle(TableStyle([
                 ("VALIGN",       (0, 0), (-1, -1), "MIDDLE"),
-                ("ALIGN",        (0, 0), (0, 0),   "LEFT"),
-                ("ALIGN",        (1, 0), (1, 0),   "RIGHT"),
+                ("ALIGN",        (0, 0), (0, 0),   "LEFT"),   # datos alineados a la izq
+                ("ALIGN",        (1, 0), (1, 0),   "RIGHT"),  # logo alineado a la der
                 ("LEFTPADDING",  (0, 0), (-1, -1), 0),
                 ("RIGHTPADDING", (0, 0), (-1, -1), 0),
                 ("TOPPADDING",   (0, 0), (-1, -1), 0),
@@ -531,13 +513,14 @@ def crear_titulo_documento(titulo: str, estilos: dict) -> Paragraph:
 def crear_bloque_empleado(empleado: dict, paleta: dict, perfil: str = "normal",
                             incluir_cargo: bool = True) -> Paragraph:
     """
-    Bloque destinatario compacto — 2 líneas en vez de 4:
-    Línea 1: NOMBRE COMPLETO (negrita) + CC. NNNNN
-    Línea 2: Cargo (si incluir_cargo)
+    Bloque destinatario compacto — 2 líneas.
+    La CC ya no se incluye aquí (aparece en pie de firma abajo).
+
+    Formato actual:
+    Línea 1: Señor(a): NOMBRE COMPLETO (negrita)
+    Línea 2: Cargo: CARGO (si incluir_cargo)
     """
     nombre = empleado.get("nombre", "").upper()
-    doc = empleado.get("documento", "")
-    tipo_doc = empleado.get("tipo_documento", "CC")
     cargo = empleado.get("cargo", "")
 
     tam = TAM_CUERPO_MIN if perfil == "compacto" else TAM_CUERPO
@@ -552,8 +535,7 @@ def crear_bloque_empleado(empleado: dict, paleta: dict, perfil: str = "normal",
         alignment=TA_LEFT,
     )
 
-    linea1 = f"<b>Señor(a):</b> <b>{nombre}</b> — {tipo_doc}. No. {doc}"
-    lineas = [linea1]
+    lineas = [f"<b>Señor(a):</b> <b>{nombre}</b>"]
     if incluir_cargo and cargo:
         lineas.append(f"<b>Cargo:</b> {cargo}")
 
