@@ -4,13 +4,15 @@ on:
   push:
     branches:
       - feature/documentos-premium-20260730
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
 
 jobs:
   apply-test-commit:
-    if: ${{ hashFiles('.github/upgrade/part-*') != '' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout working branch
@@ -22,6 +24,7 @@ jobs:
       - name: Reconstruct and verify atomic patch
         shell: bash
         run: |
+          test -f .github/upgrade/part-00
           cat .github/upgrade/part-* | base64 --decode | gzip --decompress > /tmp/documentos-premium.patch
           echo "d3becb86045859e059d070aefdc6047cc721d3e0ad5e585bbd41ddda0e1b1423  /tmp/documentos-premium.patch" | sha256sum --check
           git apply --check /tmp/documentos-premium.patch
@@ -61,6 +64,7 @@ jobs:
           retention-days: 14
 
       - name: Commit verified implementation
+        if: ${{ github.event_name == 'pull_request' }}
         shell: bash
         run: |
           rm -rf artifacts .github/upgrade .github/workflows/apply-document-upgrade.yml
