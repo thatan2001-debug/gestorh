@@ -4,8 +4,9 @@ on:
   push:
     branches:
       - feature/documentos-finales-20260730
-    paths:
-      - '.github/workflows/snapshot-final-docs.yml'
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
