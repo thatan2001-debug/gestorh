@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - feature/documentos-premium-20260730
+      - 'feature/documentos-*'
     paths:
       - 'utils/**'
       - 'scripts/generar_muestras_documentales.py'
@@ -46,7 +46,7 @@ jobs:
       - name: Run complete test suite
         run: pytest -q --junitxml=artifacts/pytest-results.xml
 
-      - name: Generate the four reference PDFs
+      - name: Generate the five final reference PDFs
         run: python scripts/generar_muestras_documentales.py
 
       - name: Render and inspect every PDF page
@@ -55,7 +55,7 @@ jobs:
       - name: Upload PDFs, renders and test results
         uses: actions/upload-artifact@v4
         with:
-          name: documentos-premium-${{ github.sha }}
+          name: documentos-finales-${{ github.sha }}
           path: |
             artifacts/documentos_finales/
             artifacts/renders/

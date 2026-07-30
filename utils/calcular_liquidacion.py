@@ -15,7 +15,7 @@ o abogado laboral. No cubre: salario integral, incapacidades, fuero,
 embargos, licencias, comisiones variables, horas extras ni mora.
 """
 
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import pandas as pd
 
 from utils.parametros_legales import (
@@ -345,6 +345,57 @@ def calcular_liquidacion_fila(
         raise ValueError(f"'{nombre}': los días de salario pendiente deben estar entre 0 y 30.")
     salario_pendiente = round(salario / 30 * dias_mes_pendiente, 2)
 
+    # Conciliación de aportes del periodo final. Los aportes se calculan
+    # únicamente sobre el salario pendiente y nunca sobre prestaciones,
+    # vacaciones o indemnizaciones.
+    estado_aportes_raw = str(fila.get("Estado aportes periodo final", "") or "").strip().lower()
+    aliases_aportes = {
+        "si": "descontados_completamente",
+        "sí": "descontados_completamente",
+        "completo": "descontados_completamente",
+        "completamente": "descontados_completamente",
+        "parcial": "descontados_parcialmente",
+        "parcialmente": "descontados_parcialmente",
+        "no": "no_descontados",
+        "ninguno": "no_descontados",
+        "no_salary": "no_existe_salario_pendiente",
+        "sin_salario_pendiente": "no_existe_salario_pendiente",
+        "manual": "revision_manual",
+    }
+    estado_aportes = aliases_aportes.get(estado_aportes_raw, estado_aportes_raw)
+    if dias_mes_pendiente <= 0:
+        estado_aportes = "no_existe_salario_pendiente"
+    elif estado_aportes not in {
+        "descontados_completamente", "descontados_parcialmente",
+        "no_descontados", "revision_manual"
+    }:
+        raise ValueError(
+            f"'{nombre}': indique si los aportes del periodo final fueron descontados completamente, "
+            "parcialmente, no fueron descontados o requieren revisión manual."
+        )
+
+    tarifa_salud = float(fila.get("Tarifa salud trabajador", 0.04) or 0.04)
+    tarifa_pension = float(fila.get("Tarifa pension trabajador", 0.04) or 0.04)
+    salud_causada = round(salario_pendiente * tarifa_salud, 2)
+    pension_causada = round(salario_pendiente * tarifa_pension, 2)
+    salud_descontada = float(fila.get("Aporte salud ya descontado", 0) or 0)
+    pension_descontada = float(fila.get("Aporte pension ya descontado", 0) or 0)
+    if min(salud_descontada, pension_descontada) < 0:
+        raise ValueError(f"'{nombre}': los aportes ya descontados no pueden ser negativos.")
+    if estado_aportes == "descontados_completamente":
+        salud_descontada = max(salud_descontada, salud_causada)
+        pension_descontada = max(pension_descontada, pension_causada)
+        salud_pendiente = pension_pendiente = 0.0
+    elif estado_aportes == "descontados_parcialmente":
+        salud_pendiente = round(max(salud_causada - salud_descontada, 0), 2)
+        pension_pendiente = round(max(pension_causada - pension_descontada, 0), 2)
+    elif estado_aportes == "no_descontados":
+        salud_descontada = pension_descontada = 0.0
+        salud_pendiente = salud_causada
+        pension_pendiente = pension_causada
+    else:  # revisión manual: no se aplica una deducción automática
+        salud_pendiente = pension_pendiente = 0.0
+
     # Indemnización: Art. 64 CST — según motivo de retiro
     # Casos que la generan: despido sin justa causa, terminación unilateral, etc.
     MOTIVOS_CON_INDEMNIZACION = {
@@ -393,7 +444,25 @@ def calcular_liquidacion_fila(
     vacaciones_pendientes = max(vacaciones - vacaciones_pagadas, 0)
     subtotal_prestaciones = round(cesantias_pendientes + intereses_cesantias + prima_pendiente + vacaciones_pendientes, 2)
     total_devengado = round(subtotal_prestaciones + salario_pendiente + indem, 2)
-    total = round(total_devengado - deducciones_autorizadas, 2)
+    deducciones_ley = []
+    if salud_pendiente > 0:
+        deducciones_ley.append({
+            "concepto": "Salud trabajador", "base": salario_pendiente,
+            "tarifa": tarifa_salud, "valor": salud_pendiente,
+        })
+    if pension_pendiente > 0:
+        deducciones_ley.append({
+            "concepto": "Pensión trabajador", "base": salario_pendiente,
+            "tarifa": tarifa_pension, "valor": pension_pendiente,
+        })
+    total_deducciones_ley = round(sum(x["valor"] for x in deducciones_ley), 2)
+    detalle_autorizadas = fila.get("Deducciones autorizadas detalle", []) or []
+    if deducciones_autorizadas > 0 and not detalle_autorizadas:
+        detalle_autorizadas = [{
+            "concepto": "Descuentos autorizados registrados",
+            "base": deducciones_autorizadas, "tarifa": "", "valor": deducciones_autorizadas,
+        }]
+    total = round(total_devengado - total_deducciones_ley - deducciones_autorizadas, 2)
 
     return {
         # Identificación
@@ -433,6 +502,17 @@ def calcular_liquidacion_fila(
         "Vacaciones (Art. 186 CST)": vacaciones,
         "Dias salario pendiente": dias_mes_pendiente,
         "Salario pendiente (estimado)": salario_pendiente,
+        "Periodo salario inicio": (fecha_corte - timedelta(days=dias_mes_pendiente - 1)).strftime("%d/%m/%Y") if dias_mes_pendiente else "",
+        "Periodo salario fin": fecha_corte.strftime("%d/%m/%Y") if dias_mes_pendiente else "",
+        "Estado aportes periodo final": estado_aportes,
+        "Base sujeta a aporte": salario_pendiente,
+        "Salud causada": salud_causada,
+        "Salud ya descontada": salud_descontada,
+        "Salud pendiente": salud_pendiente,
+        "Pension causada": pension_causada,
+        "Pension ya descontada": pension_descontada,
+        "Pension pendiente": pension_pendiente,
+        "Deducciones de ley": deducciones_ley,
         "Prima pagada": prima_pagada,
         "Cesantias consignadas": cesantias_consignadas,
         "Vacaciones pagadas": vacaciones_pagadas,
@@ -443,7 +523,9 @@ def calcular_liquidacion_fila(
         # Total
         "Subtotal prestaciones": subtotal_prestaciones,
         "TOTAL DEVENGADO": total_devengado,
+        "TOTAL DEDUCCIONES DE LEY": total_deducciones_ley,
         "TOTAL DEDUCCIONES AUTORIZADAS": deducciones_autorizadas,
+        "Deducciones autorizadas detalle": detalle_autorizadas,
         "NETO A PAGAR": total,
         "TOTAL LIQUIDACION ESTIMADA": total,
         # Meta
@@ -453,9 +535,9 @@ def calcular_liquidacion_fila(
         "Metodo dias": "Año comercial 360; vacaciones divisor 720",
         "Referencia legal": f"CST + {parametros.fuente_salario} + {parametros.fuente_auxilio}",
         "Advertencias": [
-            "No se aplicaron descuentos de salud o pensión sobre prestaciones e indemnizaciones.",
+            "Los aportes del periodo final se conciliaron únicamente sobre el salario pendiente.",
             "Los intereses de cesantías se periodizaron por año; no incluyen sanciones ni mora.",
-        ],
+        ] + (["Los aportes del periodo final requieren revisión manual."] if estado_aportes == "revision_manual" else []),
     }
 
 
