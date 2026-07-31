@@ -6,6 +6,9 @@ on:
       - fix/aportes-periodo-final-ui
     paths:
       - '.github/workflows/apply-aportes-ui-fix.yml'
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
