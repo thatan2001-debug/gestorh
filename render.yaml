@@ -2,6 +2,10 @@ services:
   - type: web
     name: gestorrh-colombia
     runtime: python
+    repo: https://github.com/thatan2001-debug/gestorh
+    branch: main
+    autoDeployTrigger: commit
+    healthCheckPath: /_stcore/health
     buildCommand: "pip install -r requirements.txt && python utils/crear_plantilla_excel.py"
     startCommand: "streamlit run app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true"
     plan: free
