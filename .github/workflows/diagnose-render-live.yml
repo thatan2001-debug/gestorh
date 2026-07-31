@@ -3,6 +3,7 @@ name: Diagnose Render live deployment
 on:
   push:
     branches:
+      - main
       - diagnostics/render-live
     paths:
       - '.github/workflows/diagnose-render-live.yml'
