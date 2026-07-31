@@ -26,8 +26,7 @@ jobs:
       - name: Verify and apply source payload
         shell: bash
         run: |
-          echo '9cd6242e2dfe590c1458df380a743a02d9755eb76e05bf5b45e5db672348a53a  .github/aportes-ui-payload.txt' | sha256sum -c -
-          base64 -d .github/aportes-ui-payload.txt > /tmp/aportes-ui-fix.tar.gz
+          tr -d '\r\n' < .github/aportes-ui-payload.txt | base64 -d > /tmp/aportes-ui-fix.tar.gz
           echo '1bc06dca3a69676ccf0db53c21aa25beda0a0190fb56d7182e1925a50af09134  /tmp/aportes-ui-fix.tar.gz' | sha256sum -c -
           tar -xzf /tmp/aportes-ui-fix.tar.gz -C .
           rm .github/aportes-ui-payload.txt
