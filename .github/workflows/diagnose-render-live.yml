@@ -1,12 +1,6 @@
-name: Diagnose Render live deployment
+name: Verify Render production deployment
 
 on:
-  push:
-    branches:
-      - main
-      - diagnostics/render-live
-    paths:
-      - '.github/workflows/diagnose-render-live.yml'
   pull_request:
     branches:
       - main
@@ -17,74 +11,116 @@ permissions:
   contents: read
 
 jobs:
-  diagnose:
+  verify-production:
+    if: github.head_ref == 'verify/render-production-live'
     runs-on: ubuntu-latest
+    env:
+      EXPECTED_COMMIT: 16b89727ddddaf68d4798169147101ebc33e5086
+      LIVE_URL: https://rh-facil.onrender.com
+      RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Probe candidate Render services
+      - name: Force deploy when a Render hook is configured
         shell: bash
         run: |
-          set -u
-          mkdir -p artifacts/render-diagnostics
-          echo "repository_sha=${GITHUB_SHA}" | tee artifacts/render-diagnostics/summary.txt
-          for url in https://rh-facil.onrender.com https://gestorrh-colombia.onrender.com; do
-            slug=$(echo "$url" | sed 's#https://##; s#[^A-Za-z0-9]#-#g')
-            echo "===== $url =====" | tee -a artifacts/render-diagnostics/summary.txt
-            curl -L --connect-timeout 30 --max-time 180 -sS \
-              -D "artifacts/render-diagnostics/${slug}-headers.txt" \
-              -o "artifacts/render-diagnostics/${slug}-body.html" \
-              -w "http_code=%{http_code}\nfinal_url=%{url_effective}\nremote_ip=%{remote_ip}\ntime_total=%{time_total}\n" \
-              "$url" | tee -a artifacts/render-diagnostics/summary.txt || true
-            for path in /_stcore/health /_stcore/host-config; do
-              curl -L --connect-timeout 30 --max-time 180 -sS \
-                -D "artifacts/render-diagnostics/${slug}-$(echo $path | tr '/' '-')-headers.txt" \
-                -o "artifacts/render-diagnostics/${slug}-$(echo $path | tr '/' '-')-body.txt" \
-                -w "${path}_http_code=%{http_code}\n" \
-                "${url}${path}" | tee -a artifacts/render-diagnostics/summary.txt || true
-            done
-            grep -Eio '<title>[^<]+' "artifacts/render-diagnostics/${slug}-body.html" | head -1 | tee -a artifacts/render-diagnostics/summary.txt || true
-            sha256sum "artifacts/render-diagnostics/${slug}-body.html" | tee -a artifacts/render-diagnostics/summary.txt || true
-          done
+          if [ -n "${RENDER_DEPLOY_HOOK_URL}" ]; then
+            separator='?'
+            case "${RENDER_DEPLOY_HOOK_URL}" in *\?*) separator='&' ;; esac
+            curl --fail --show-error --silent --request POST \
+              "${RENDER_DEPLOY_HOOK_URL}${separator}ref=${EXPECTED_COMMIT}"
+            echo "Render deploy hook invoked for ${EXPECTED_COMMIT}."
+          else
+            echo "No RENDER_DEPLOY_HOOK_URL secret is configured; relying on Render auto-deploy from main."
+          fi
 
-      - name: Browser-level Streamlit inspection
-        shell: bash
+      - name: Install browser
         run: |
           python -m pip install --quiet playwright
           python -m playwright install --with-deps chromium
-          cat > /tmp/inspect_render.py <<'PY'
+
+      - name: Poll production and verify the active process
+        shell: bash
+        run: |
+          mkdir -p artifacts/render-production-verification
+          cat > /tmp/verify_render_production.py <<'PY'
+          import os
+          import time
           from pathlib import Path
           from playwright.sync_api import sync_playwright
 
-          out = Path('artifacts/render-diagnostics')
-          urls = [
-              'https://rh-facil.onrender.com',
-              'https://gestorrh-colombia.onrender.com',
-          ]
+          live_url = os.environ["LIVE_URL"].rstrip("/")
+          expected_commit = os.environ["EXPECTED_COMMIT"]
+          diagnostic_url = f"{live_url}/?deployment_diagnostics=1"
+          output = Path("artifacts/render-production-verification")
+          output.mkdir(parents=True, exist_ok=True)
+          marker = "GESTOR_RH_DEPLOYMENT_DIAGNOSTICS_V2"
+          selector_label = "¿Los aportes del periodo final ya fueron descontados en nómina? *"
+          last_text = ""
+          last_error = ""
+
           with sync_playwright() as p:
               browser = p.chromium.launch(headless=True)
-              for url in urls:
-                  slug = url.removeprefix('https://').replace('.', '-')
-                  page = browser.new_page(viewport={"width": 1440, "height": 1200})
+              page = browser.new_page(viewport={"width": 1440, "height": 1400})
+              for attempt in range(1, 25):
                   try:
-                      page.goto(url, wait_until='domcontentloaded', timeout=180_000)
-                      page.wait_for_timeout(25_000)
-                      page.screenshot(path=str(out / f'{slug}.png'), full_page=True)
-                      text = page.locator('body').inner_text(timeout=30_000)
-                      (out / f'{slug}-visible.txt').write_text(text, encoding='utf-8')
-                      print(f'{url}: title={page.title()!r}, visible_chars={len(text)}')
-                      print(text[:2000])
+                      page.goto(diagnostic_url, wait_until="domcontentloaded", timeout=180_000)
+                      page.wait_for_timeout(8_000)
+                      last_text = page.locator("body").inner_text(timeout=30_000)
+                      (output / "last-visible-text.txt").write_text(last_text, encoding="utf-8")
+                      page.screenshot(path=str(output / "last-page.png"), full_page=True)
+                      print(f"Attempt {attempt}: title={page.title()!r}, chars={len(last_text)}")
+                      if marker not in last_text:
+                          print("Diagnostic marker not present yet; deployed process is still older.")
+                      else:
+                          assert "branch=main" in last_text, last_text
+                          assert f"commit={expected_commit}" in last_text, last_text
+                          days = page.get_by_label("Días de salario realmente pendientes")
+                          assert days.is_visible(), "Days input is not visible"
+                          assert days.input_value() == "15", days.input_value()
+                          selector = page.get_by_label(selector_label)
+                          assert selector.is_visible(), "Contribution selector is not visible"
+                          assert "Sí, fueron descontados completamente" in last_text
+                          assert "Fueron descontados parcialmente" not in last_text or selector.is_visible()
+                          page.screenshot(path=str(output / "verified-production.png"), full_page=True)
+                          (output / "verification.txt").write_text(
+                              "\n".join([
+                                  "status=verified",
+                                  "branch=main",
+                                  f"commit={expected_commit}",
+                                  "days_pending=15",
+                                  "contributions_selector=visible",
+                                  f"url={diagnostic_url}",
+                              ]),
+                              encoding="utf-8",
+                          )
+                          print("Production verification succeeded.")
+                          browser.close()
+                          raise SystemExit(0)
+                  except SystemExit:
+                      raise
                   except Exception as exc:
-                      (out / f'{slug}-error.txt').write_text(repr(exc), encoding='utf-8')
-                      print(f'{url}: ERROR {exc!r}')
-                  finally:
-                      page.close()
+                      last_error = repr(exc)
+                      print(f"Attempt {attempt} error: {last_error}")
+                  time.sleep(30)
+
+              (output / "verification.txt").write_text(
+                  "\n".join([
+                      "status=failed",
+                      f"expected_commit={expected_commit}",
+                      f"last_error={last_error}",
+                      f"url={diagnostic_url}",
+                  ]),
+                  encoding="utf-8",
+              )
               browser.close()
+              raise SystemExit("Production did not expose the expected main commit and selector within 12 minutes.")
           PY
-          python /tmp/inspect_render.py | tee artifacts/render-diagnostics/browser-summary.txt
+          python /tmp/verify_render_production.py
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: render-live-diagnostics-${{ github.sha }}
-          path: artifacts/render-diagnostics/
-          retention-days: 7
+          name: render-production-verification-${{ env.EXPECTED_COMMIT }}
+          path: artifacts/render-production-verification/
+          retention-days: 14
