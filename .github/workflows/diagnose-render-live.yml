@@ -52,3 +52,5 @@ jobs:
           git add -u scripts/apply_render_production_verification.py .github/workflows/apply-render-production-verification.yml .github/workflows/diagnose-render-live.yml
           git commit -m 'fix: pin Render to main and expose deployment verification'
           git push origin HEAD:fix/render-production-verification
+
+# Retry after restoring the deterministic patch script.
