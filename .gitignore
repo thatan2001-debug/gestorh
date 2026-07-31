@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Generated tests and document artifacts
+artifacts/
+
+# Local runtime files
+.env
+salidas/

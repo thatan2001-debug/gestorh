@@ -37,6 +37,12 @@ else:
 st.set_page_config(page_title="Gestor RH IA", page_icon=_favicon, layout="wide")
 st.markdown(CSS, unsafe_allow_html=True)
 
+# Diagnóstico seguro del proceso activo de Render. Solo se muestra con
+# ?deployment_diagnostics=1 y no expone secretos.
+from utils.deployment_diagnostics import mostrar_diagnostico_despliegue
+if mostrar_diagnostico_despliegue():
+    st.stop()
+
 CARPETA_SALIDAS = Path("salidas"); CARPETA_SALIDAS.mkdir(exist_ok=True)
 CARPETA_ASSETS  = Path("assets");  CARPETA_ASSETS.mkdir(exist_ok=True)
 PLANTILLA_EXCEL = Path("plantillas/Base_Empleados.xlsx")
