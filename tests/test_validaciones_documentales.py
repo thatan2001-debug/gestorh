@@ -33,3 +33,40 @@ def test_dotacion_sin_items_es_error():
         "fecha_entrega": date.today(), "tipo_entrega": "uniforme_corporativo", "items": []
     })
     assert any(h.codigo == "DOTACION_SIN_ITEMS" for h in hs)
+
+
+def test_liquidacion_exige_estado_aportes_cuando_hay_salario_pendiente():
+    hs = validar_documento("liquidacion", EMPLEADO, EMPRESA, {
+        "fecha_corte": date(2026, 7, 30),
+        "motivo_retiro": "renuncia",
+        "pagos_previos_confirmados": True,
+        "novedades_confirmadas": True,
+        "dias_salario_pendiente": 15,
+    })
+    assert any(h.codigo == "APORTES_PERIODO_FINAL_SIN_CONCILIAR" and h.nivel == Nivel.ERROR for h in hs)
+
+
+def test_liquidacion_aportes_parciales_exige_valores_retenidos():
+    hs = validar_documento("liquidacion", EMPLEADO, EMPRESA, {
+        "fecha_corte": date(2026, 7, 30),
+        "motivo_retiro": "renuncia",
+        "pagos_previos_confirmados": True,
+        "novedades_confirmadas": True,
+        "dias_salario_pendiente": 15,
+        "estado_aportes_periodo_final": "descontados_parcialmente",
+        "aporte_salud_ya_descontado": 0,
+        "aporte_pension_ya_descontado": 0,
+    })
+    assert any(h.codigo == "APORTES_PARCIALES_SIN_VALORES" and h.nivel == Nivel.ERROR for h in hs)
+
+
+def test_liquidacion_sin_salario_define_aportes_no_aplican():
+    hs = validar_documento("liquidacion", EMPLEADO, EMPRESA, {
+        "fecha_corte": date(2026, 7, 30),
+        "motivo_retiro": "renuncia",
+        "pagos_previos_confirmados": True,
+        "novedades_confirmadas": True,
+        "dias_salario_pendiente": 0,
+        "estado_aportes_periodo_final": "no_existe_salario_pendiente",
+    })
+    assert not any(h.nivel == Nivel.ERROR for h in hs)

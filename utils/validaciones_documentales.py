@@ -181,9 +181,25 @@ def validar_documento(tipo: str, empleado: dict, empresa: dict,
                 "Confirme si existen licencias, suspensiones, incapacidades, comisiones o cambios salariales.", "liquidacion.novedades"))
         dias_salario = int(config.get("dias_salario_pendiente", 0) or 0)
         estado_aportes = str(config.get("estado_aportes_periodo_final") or "").strip().lower()
+        estados_aportes_validos = {
+            "descontados_completamente", "descontados_parcialmente",
+            "no_descontados", "revision_manual",
+        }
         if dias_salario > 0 and not estado_aportes:
             hallazgos.append(Hallazgo(Nivel.ERROR, "APORTES_PERIODO_FINAL_SIN_CONCILIAR",
                 "Indique si los aportes del periodo final ya fueron descontados en nómina.", "liquidacion.aportes_periodo_final"))
+        elif dias_salario > 0 and estado_aportes not in estados_aportes_validos:
+            hallazgos.append(Hallazgo(Nivel.ERROR, "APORTES_PERIODO_FINAL_ESTADO_INVALIDO",
+                "Seleccione una opción válida para los aportes del periodo final.", "liquidacion.aportes_periodo_final"))
+        elif dias_salario > 0 and estado_aportes == "descontados_parcialmente":
+            salud_desc = float(config.get("aporte_salud_ya_descontado", 0) or 0)
+            pension_desc = float(config.get("aporte_pension_ya_descontado", 0) or 0)
+            if salud_desc < 0 or pension_desc < 0:
+                hallazgos.append(Hallazgo(Nivel.ERROR, "APORTES_PARCIALES_NEGATIVOS",
+                    "Los aportes ya descontados no pueden ser negativos.", "liquidacion.aportes_periodo_final"))
+            elif salud_desc + pension_desc <= 0:
+                hallazgos.append(Hallazgo(Nivel.ERROR, "APORTES_PARCIALES_SIN_VALORES",
+                    "Registre los valores de salud o pensión que ya fueron descontados en nómina.", "liquidacion.aportes_periodo_final"))
         if dias_salario <= 0 and estado_aportes and estado_aportes not in {"no_existe_salario_pendiente", "no_salary", "sin_salario_pendiente"}:
             hallazgos.append(Hallazgo(Nivel.INFORMACION, "APORTES_NO_APLICAN",
                 "No existe salario pendiente; no se calculan aportes del periodo final.", "liquidacion.aportes_periodo_final"))
