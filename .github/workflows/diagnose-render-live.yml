@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - diagnostics/render-live
+      - diagnostics/render-live-run
     paths:
       - '.github/workflows/diagnose-render-live.yml'
   pull_request:
