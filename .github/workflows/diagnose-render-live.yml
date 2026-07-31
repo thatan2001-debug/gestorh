@@ -6,6 +6,11 @@ on:
       - diagnostics/render-live
     paths:
       - '.github/workflows/diagnose-render-live.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/diagnose-render-live.yml'
 
 permissions:
   contents: read
