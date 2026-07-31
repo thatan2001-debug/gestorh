@@ -6,6 +6,9 @@ on:
       - feature/documentos-finales-20260730
     paths:
       - '.github/workflows/documentos-premium.yml'
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
