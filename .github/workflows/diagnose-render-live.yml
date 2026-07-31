@@ -1,12 +1,6 @@
 name: Diagnose Render live deployment
 
 on:
-  push:
-    branches:
-      - main
-      - diagnostics/render-live
-    paths:
-      - '.github/workflows/diagnose-render-live.yml'
   pull_request:
     branches:
       - main
@@ -14,77 +8,47 @@ on:
       - '.github/workflows/diagnose-render-live.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  diagnose:
+  apply-render-production-verification:
+    if: github.head_ref == 'fix/render-production-verification'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Probe candidate Render services
-        shell: bash
-        run: |
-          set -u
-          mkdir -p artifacts/render-diagnostics
-          echo "repository_sha=${GITHUB_SHA}" | tee artifacts/render-diagnostics/summary.txt
-          for url in https://rh-facil.onrender.com https://gestorrh-colombia.onrender.com; do
-            slug=$(echo "$url" | sed 's#https://##; s#[^A-Za-z0-9]#-#g')
-            echo "===== $url =====" | tee -a artifacts/render-diagnostics/summary.txt
-            curl -L --connect-timeout 30 --max-time 180 -sS \
-              -D "artifacts/render-diagnostics/${slug}-headers.txt" \
-              -o "artifacts/render-diagnostics/${slug}-body.html" \
-              -w "http_code=%{http_code}\nfinal_url=%{url_effective}\nremote_ip=%{remote_ip}\ntime_total=%{time_total}\n" \
-              "$url" | tee -a artifacts/render-diagnostics/summary.txt || true
-            for path in /_stcore/health /_stcore/host-config; do
-              curl -L --connect-timeout 30 --max-time 180 -sS \
-                -D "artifacts/render-diagnostics/${slug}-$(echo $path | tr '/' '-')-headers.txt" \
-                -o "artifacts/render-diagnostics/${slug}-$(echo $path | tr '/' '-')-body.txt" \
-                -w "${path}_http_code=%{http_code}\n" \
-                "${url}${path}" | tee -a artifacts/render-diagnostics/summary.txt || true
-            done
-            grep -Eio '<title>[^<]+' "artifacts/render-diagnostics/${slug}-body.html" | head -1 | tee -a artifacts/render-diagnostics/summary.txt || true
-            sha256sum "artifacts/render-diagnostics/${slug}-body.html" | tee -a artifacts/render-diagnostics/summary.txt || true
-          done
-
-      - name: Browser-level Streamlit inspection
-        shell: bash
-        run: |
-          python -m pip install --quiet playwright
-          python -m playwright install --with-deps chromium
-          cat > /tmp/inspect_render.py <<'PY'
-          from pathlib import Path
-          from playwright.sync_api import sync_playwright
-
-          out = Path('artifacts/render-diagnostics')
-          urls = [
-              'https://rh-facil.onrender.com',
-              'https://gestorrh-colombia.onrender.com',
-          ]
-          with sync_playwright() as p:
-              browser = p.chromium.launch(headless=True)
-              for url in urls:
-                  slug = url.removeprefix('https://').replace('.', '-')
-                  page = browser.new_page(viewport={"width": 1440, "height": 1200})
-                  try:
-                      page.goto(url, wait_until='domcontentloaded', timeout=180_000)
-                      page.wait_for_timeout(25_000)
-                      page.screenshot(path=str(out / f'{slug}.png'), full_page=True)
-                      text = page.locator('body').inner_text(timeout=30_000)
-                      (out / f'{slug}-visible.txt').write_text(text, encoding='utf-8')
-                      print(f'{url}: title={page.title()!r}, visible_chars={len(text)}')
-                      print(text[:2000])
-                  except Exception as exc:
-                      (out / f'{slug}-error.txt').write_text(repr(exc), encoding='utf-8')
-                      print(f'{url}: ERROR {exc!r}')
-                  finally:
-                      page.close()
-              browser.close()
-          PY
-          python /tmp/inspect_render.py | tee artifacts/render-diagnostics/browser-summary.txt
-
-      - uses: actions/upload-artifact@v4
         with:
-          name: render-live-diagnostics-${{ github.sha }}
-          path: artifacts/render-diagnostics/
-          retention-days: 7
+          ref: fix/render-production-verification
+          fetch-depth: 0
+
+      - name: Apply deterministic production patch
+        run: python scripts/apply_render_production_verification.py
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pymupdf
+
+      - name: Validate entrypoint and complete suite
+        run: |
+          python -m py_compile app.py utils/deployment_diagnostics.py
+          pytest -q tests/test_deployment_diagnostics.py
+          pytest -q --junitxml=artifacts/pytest-results-render-verification.xml
+
+      - name: Publish only verified source changes
+        run: |
+          rm -f scripts/apply_render_production_verification.py
+          rm -f .github/workflows/apply-render-production-verification.yml
+          git fetch origin main
+          git checkout origin/main -- .github/workflows/diagnose-render-live.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app.py render.yaml utils/deployment_diagnostics.py tests/test_deployment_diagnostics.py
+          git add -u scripts/apply_render_production_verification.py .github/workflows/apply-render-production-verification.yml .github/workflows/diagnose-render-live.yml
+          git commit -m 'fix: pin Render to main and expose deployment verification'
+          git push origin HEAD:fix/render-production-verification
