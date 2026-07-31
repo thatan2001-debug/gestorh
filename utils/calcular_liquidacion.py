@@ -382,6 +382,13 @@ def calcular_liquidacion_fila(
     pension_descontada = float(fila.get("Aporte pension ya descontado", 0) or 0)
     if min(salud_descontada, pension_descontada) < 0:
         raise ValueError(f"'{nombre}': los aportes ya descontados no pueden ser negativos.")
+    if estado_aportes == "descontados_parcialmente" and (
+        salud_descontada > salud_causada or pension_descontada > pension_causada
+    ):
+        raise ValueError(
+            f"'{nombre}': un aporte ya descontado no puede superar el aporte causado "
+            "sobre el salario pendiente."
+        )
     if estado_aportes == "descontados_completamente":
         salud_descontada = max(salud_descontada, salud_causada)
         pension_descontada = max(pension_descontada, pension_causada)

@@ -386,9 +386,9 @@ def pantalla_generar(usuario: dict, datos_empresa: dict):
             })
             for h in hallazgos:
                 if h.nivel == Nivel.ERROR:
-                    st.error(f"{h.codigo}: {h.mensaje}"); errores_revision.append(h.mensaje)
+                    st.error(h.mensaje); errores_revision.append(h.mensaje)
                 elif h.nivel == Nivel.ADVERTENCIA:
-                    st.warning(f"{h.codigo}: {h.mensaje}")
+                    st.warning(h.mensaje)
                 else:
                     st.info(h.mensaje)
     revision_confirmada = st.checkbox(
@@ -459,6 +459,36 @@ def _config_default(emp: dict, tipo_doc: str) -> dict:
         "salario_variable": float(emp.get("ingreso_promedio_variable",0) or 0),
         "conceptos_pend":   "",
         "observaciones":    "",
+        "dias_salario_pendiente": 0,
+        "estado_aportes_periodo_final": "no_existe_salario_pendiente",
+        "aporte_salud_ya_descontado": 0.0,
+        "aporte_pension_ya_descontado": 0.0,
+        "pagos_previos_confirmados": False,
+        "novedades_confirmadas": False,
+    }
+
+
+def _normalizar_aportes_formulario(dias_salario_pendiente: int,
+                                    estado_aportes: str | None,
+                                    salud_ya_descontada: float = 0,
+                                    pension_ya_descontada: float = 0) -> dict:
+    """Convierte la respuesta del formulario en datos válidos para el cálculo."""
+    dias = int(dias_salario_pendiente or 0)
+    if dias <= 0:
+        return {
+            "estado_aportes_periodo_final": "no_existe_salario_pendiente",
+            "aporte_salud_ya_descontado": 0.0,
+            "aporte_pension_ya_descontado": 0.0,
+        }
+
+    estado = str(estado_aportes or "").strip()
+    if estado != "descontados_parcialmente":
+        salud_ya_descontada = 0.0
+        pension_ya_descontada = 0.0
+    return {
+        "estado_aportes_periodo_final": estado,
+        "aporte_salud_ya_descontado": float(salud_ya_descontada or 0),
+        "aporte_pension_ya_descontado": float(pension_ya_descontada or 0),
     }
 
 
@@ -548,7 +578,79 @@ def _mostrar_config_global(tipo_doc: str, carrito: dict):
                 "Actualizar ficha y marcar al trabajador como retirado al generar",
                 value=False, key="cfg_actualizar_estado_retiro")
 
+        etiquetas_aportes = {
+            "descontados_completamente": "Sí, fueron descontados completamente",
+            "descontados_parcialmente": "Fueron descontados parcialmente",
+            "no_descontados": "No fueron descontados",
+            "revision_manual": "Requiere revisión manual",
+        }
+        estado_aportes = None
+        aportes_parciales: dict[str, tuple[float, float]] = {}
+        if dias_salario_pendiente <= 0:
+            st.info(
+                "No existe salario pendiente. Salud y pensión del periodo final no aplican "
+                "y no se realizará ninguna deducción por este concepto."
+            )
+        else:
+            estado_aportes = st.selectbox(
+                "¿Los aportes del periodo final ya fueron descontados en nómina? *",
+                options=list(etiquetas_aportes),
+                index=None,
+                placeholder="Selecciona una opción",
+                format_func=lambda x: etiquetas_aportes[x],
+                help=(
+                    "Esta respuesta evita descontar dos veces salud y pensión. "
+                    "Los aportes solo se calculan sobre el salario pendiente."
+                ),
+                key="cfg_estado_aportes_periodo_final",
+            )
+            if estado_aportes == "descontados_parcialmente":
+                st.caption(
+                    "Registra por trabajador los valores que ya fueron retenidos en nómina. "
+                    "El sistema descontará únicamente el saldo pendiente."
+                )
+                for idx_aporte, (doc_e, item_aporte) in enumerate(carrito.items()):
+                    emp_aporte = item_aporte.get("empleado", {})
+                    salario_aporte = float(
+                        item_aporte.get("config", {}).get(
+                            "salario_base", emp_aporte.get("salario", 0)
+                        ) or 0
+                    )
+                    base_aporte = round(salario_aporte / 30 * dias_salario_pendiente, 2)
+                    max_aporte = round(base_aporte * 0.04, 2)
+                    st.markdown(
+                        f"**{emp_aporte.get('nombre', doc_e)}** · Base estimada: "
+                        f"${base_aporte:,.0f} COP".replace(",", ".")
+                    )
+                    ca, cp = st.columns(2)
+                    with ca:
+                        salud_desc = st.number_input(
+                            "Salud ya descontada ($)",
+                            min_value=0.0, max_value=float(max_aporte), step=1000.0,
+                            key=f"cfg_salud_desc_{idx_aporte}_{doc_e}",
+                        )
+                    with cp:
+                        pension_desc = st.number_input(
+                            "Pensión ya descontada ($)",
+                            min_value=0.0, max_value=float(max_aporte), step=1000.0,
+                            key=f"cfg_pension_desc_{idx_aporte}_{doc_e}",
+                        )
+                    aportes_parciales[doc_e] = (salud_desc, pension_desc)
+            elif estado_aportes == "descontados_completamente":
+                st.success("No se volverán a descontar salud ni pensión en la liquidación.")
+            elif estado_aportes == "no_descontados":
+                st.info("El sistema calculará salud y pensión sobre el salario pendiente registrado.")
+            elif estado_aportes == "revision_manual":
+                st.warning(
+                    "La liquidación no aplicará descuentos automáticos de salud y pensión "
+                    "hasta que Recursos Humanos revise el caso."
+                )
+
         for doc_e in carrito:
+            salud_desc, pension_desc = aportes_parciales.get(doc_e, (0.0, 0.0))
+            config_aportes = _normalizar_aportes_formulario(
+                dias_salario_pendiente, estado_aportes, salud_desc, pension_desc
+            )
             carrito[doc_e]["config"].update({
                 "fecha_corte": fc,
                 "motivo_retiro": motivo,
@@ -557,6 +659,7 @@ def _mostrar_config_global(tipo_doc: str, carrito: dict):
                 "novedades_confirmadas": novedades_ok,
                 "dias_salario_pendiente": dias_salario_pendiente,
                 "actualizar_estado_empleado": actualizar_estado,
+                **config_aportes,
             })
 
     elif tipo_doc == "paz_salvo":
@@ -1070,6 +1173,9 @@ def _ejecutar_generacion_unificada(
                     "Tipo contrato": emp.get("tipo_contrato","Indefinido"),
                     "Cuenta bancaria": emp.get("cuenta_bancaria",""),
                     "Dias salario pendiente": conf.get("dias_salario_pendiente", 0),
+                    "Estado aportes periodo final": conf.get("estado_aportes_periodo_final", ""),
+                    "Aporte salud ya descontado": conf.get("aporte_salud_ya_descontado", 0),
+                    "Aporte pension ya descontado": conf.get("aporte_pension_ya_descontado", 0),
                 })
                 fc_dt = datetime(fc.year, fc.month, fc.day)
 
@@ -1083,6 +1189,12 @@ def _ejecutar_generacion_unificada(
                     st.error(f"❌ Error al calcular liquidación: {e}")
                     barra.progress((idx+1)/len(carrito), text=f"Error en {nom}")
                     continue
+
+                # Confirmaciones de la interfaz que requiere el documento definitivo.
+                res.update({
+                    "Pagos previos confirmados": bool(conf.get("pagos_previos_confirmados")),
+                    "Novedades confirmadas": bool(conf.get("novedades_confirmadas")),
+                })
 
                 # ✅ Verificar el cálculo antes de generar PDF
                 indem_calc = res.get("Indemnizacion (Art. 64 CST)", 0)
