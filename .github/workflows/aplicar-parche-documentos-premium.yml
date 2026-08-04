@@ -1,0 +1,43 @@
+name: Aplicar parche documentos premium
+
+on:
+  push:
+    branches:
+      - fix/integrar-documentos-premium-20260803
+    paths:
+      - scripts/aplicar_parche_documentos_premium.py
+      - .github/workflows/aplicar-parche-documentos-premium.yml
+
+permissions:
+  contents: write
+
+jobs:
+  aplicar-parche:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout de la rama
+        uses: actions/checkout@v4
+        with:
+          ref: fix/integrar-documentos-premium-20260803
+          fetch-depth: 0
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Aplicar parche
+        run: python scripts/aplicar_parche_documentos_premium.py
+
+      - name: Verificar sintaxis
+        run: python -m py_compile utils/documentos_premium.py utils/documento_control.py
+
+      - name: Publicar el archivo corregido
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add utils/documentos_premium.py
+          git diff --cached --quiet && exit 0
+          git commit -m "fix: corregir tabla y declaración del acta de dotación"
+          git push origin HEAD:fix/integrar-documentos-premium-20260803
