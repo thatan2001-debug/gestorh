@@ -131,7 +131,7 @@ class ControlDocumentalCanvas(canvas.Canvas):
                 self.setFillAlpha(0.14)
             except Exception:
                 pass
-n            self.setFont("Helvetica-Bold", 27)
+            self.setFont("Helvetica-Bold", 27)
             self.drawCentredString(0, 8, "BORRADOR - PENDIENTE DE REVISION")
             self.setFont("Helvetica", 10.5)
             self.drawCentredString(0, -12, "No valido para firma ni entrega")
