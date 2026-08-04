@@ -18,6 +18,7 @@ from reportlab.pdfgen import canvas
 BOGOTA = ZoneInfo("America/Bogota")
 VERSION_PLANTILLA = "2.1"
 VERSION_REGLAS = "2026.1"
+# Este módulo es la ruta canónica del control documental de Gestor RH IA.
 
 CODIGOS = {
     "contrato_indefinido": "RH-CONT-IND",
@@ -130,7 +131,7 @@ class ControlDocumentalCanvas(canvas.Canvas):
                 self.setFillAlpha(0.14)
             except Exception:
                 pass
-            self.setFont("Helvetica-Bold", 27)
+n            self.setFont("Helvetica-Bold", 27)
             self.drawCentredString(0, 8, "BORRADOR - PENDIENTE DE REVISION")
             self.setFont("Helvetica", 10.5)
             self.drawCentredString(0, -12, "No valido para firma ni entrega")
