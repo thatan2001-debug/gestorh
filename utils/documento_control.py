@@ -119,8 +119,22 @@ class ControlDocumentalCanvas(canvas.Canvas):
 
     def _dibujar_fondo_y_pie(self, total_paginas: int) -> None:
         ancho, alto = A4
-        # Marca de agua diagonal ELIMINADA por decisión del cliente
-        # (antes decía "BORRADOR - PENDIENTE DE REVISION")
+        # Marca de agua exclusiva para borradores. Los documentos definitivos
+        # no muestran marcas decorativas ni mensajes internos.
+        if self.usar_marca_agua:
+            self.saveState()
+            self.translate(ancho / 2, alto / 2)
+            self.rotate(32)
+            self.setFillColor(colors.HexColor("#9CA3AF"))
+            try:
+                self.setFillAlpha(0.14)
+            except Exception:
+                pass
+            self.setFont("Helvetica-Bold", 27)
+            self.drawCentredString(0, 8, "BORRADOR - PENDIENTE DE REVISION")
+            self.setFont("Helvetica", 10.5)
+            self.drawCentredString(0, -12, "No valido para firma ni entrega")
+            self.restoreState()
 
         if self.getPageNumber() > 1:
             self.saveState()
