@@ -181,9 +181,16 @@ def validar_documento(tipo: str, empleado: dict, empresa: dict,
                 "Confirme si existen licencias, suspensiones, incapacidades, comisiones o cambios salariales.", "liquidacion.novedades"))
         dias_salario = int(config.get("dias_salario_pendiente", 0) or 0)
         estado_aportes = str(config.get("estado_aportes_periodo_final") or "").strip().lower()
+        # Estados válidos ampliados con esquema quincenal (algunas empresas descuentan
+        # aportes la primera quincena, otras la segunda, otras a fin de mes)
         estados_aportes_validos = {
-            "descontados_completamente", "descontados_parcialmente",
-            "no_descontados", "revision_manual",
+            "descontados_completamente",      # Ya se descontaron TODOS los aportes
+            "descontados_primera_quincena",   # Solo se descontó la mitad (primera quincena) — falta la segunda
+            "descontados_segunda_quincena",   # Todo descontado en la segunda quincena
+            "descontados_fin_de_mes",         # Se descuenta al pagar fin de mes (aún no descontado)
+            "descontados_parcialmente",       # Descuento manual parcial con valores específicos
+            "no_descontados",                 # No se ha descontado nada — descontar en la liquidación
+            "revision_manual",                # Requiere revisión manual, no calcular
         }
         if dias_salario > 0 and not estado_aportes:
             hallazgos.append(Hallazgo(Nivel.ERROR, "APORTES_PERIODO_FINAL_SIN_CONCILIAR",

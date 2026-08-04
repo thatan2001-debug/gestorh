@@ -21,7 +21,7 @@ Objetivos de diseño:
 """
 
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import letter, A4
+from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import cm, mm
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
@@ -38,29 +38,44 @@ from typing import Optional
 # 1. CONFIGURACIÓN DE PÁGINA
 # ══════════════════════════════════════════════════════════════════════════════
 
-PAGE_SIZE = letter  # 612 x 792 pts (usar A4 si mercado internacional)
+from reportlab.lib.pagesizes import A4  # 595 x 842 pts — estándar corporativo internacional
+
+PAGE_SIZE = A4
 PAGE_WIDTH, PAGE_HEIGHT = PAGE_SIZE
 
-# ─── Márgenes ────────────────────────────────────────────────────────────────
-# Tres perfiles según necesidad de espacio:
-
+# ─── Márgenes por perfil (compatibilidad con código existente) ───────────
 # COMPACTO: aprovecha máximo espacio, para documentos que necesitan una hoja
 MARGEN_COMPACTO_SUP = 1.8 * cm
 MARGEN_COMPACTO_INF = 2.0 * cm
 MARGEN_COMPACTO_IZQ = 2.2 * cm
 MARGEN_COMPACTO_DER = 2.2 * cm
 
-# NORMAL: balance profesional (default para cartas, certificados)
+# NORMAL: balance profesional
 MARGEN_NORMAL_SUP = 2.2 * cm
 MARGEN_NORMAL_INF = 2.5 * cm
 MARGEN_NORMAL_IZQ = 2.8 * cm
 MARGEN_NORMAL_DER = 2.5 * cm
 
-# AMPLIO: para contratos y documentos legales (mayor formalidad)
+# AMPLIO: para contratos y documentos legales
 MARGEN_AMPLIO_SUP = 2.5 * cm
 MARGEN_AMPLIO_INF = 3.0 * cm
 MARGEN_AMPLIO_IZQ = 3.2 * cm
 MARGEN_AMPLIO_DER = 2.8 * cm
+
+# ─── Márgenes por TIPO de documento (rediseño A4) ────────────────────────
+# Valores del brief de diseño corporativo
+MARGENES_POR_TIPO = {
+    # Certificado: 23/22/25/25 mm — sobrio, cercano a carta empresarial
+    "certificado": (2.3 * cm, 2.2 * cm, 2.5 * cm, 2.5 * cm),
+    # Contrato: 22/22/28/23 mm — margen izquierdo amplio para perforación/archivo
+    "contrato_indefinido": (2.2 * cm, 2.2 * cm, 2.8 * cm, 2.3 * cm),
+    "contrato": (2.2 * cm, 2.2 * cm, 2.8 * cm, 2.3 * cm),
+    # Liquidación: 18/20/17/17 mm — más espacio horizontal para tablas
+    "liquidacion": (1.8 * cm, 2.0 * cm, 1.7 * cm, 1.7 * cm),
+    # Actas: 20/20/22/22 mm — equilibrado
+    "dotacion": (2.0 * cm, 2.0 * cm, 2.2 * cm, 2.2 * cm),
+    "acta": (2.0 * cm, 2.0 * cm, 2.2 * cm, 2.2 * cm),
+}
 
 
 def ancho_util(perfil: str = "normal") -> float:

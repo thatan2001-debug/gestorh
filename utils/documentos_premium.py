@@ -11,7 +11,8 @@ from typing import Iterable
 from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import letter
+from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_JUSTIFY
+from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import cm
 from reportlab.platypus import (
@@ -120,7 +121,18 @@ def _empresa_normalizada(empresa: dict) -> dict:
     }
 
 
-def _margenes(perfil: str):
+def _margenes(perfil: str, tipo_documento: str = None):
+    """Márgenes por perfil O por tipo de documento (prioridad al tipo).
+
+    Márgenes A4 corporativos por tipo (del brief de diseño):
+      certificado:  23/22/25/25 mm
+      contrato:     22/22/28/23 mm  (izq amplio para perforación)
+      liquidacion:  18/20/17/17 mm  (más espacio horizontal para tablas)
+      dotacion:     20/20/22/22 mm
+    """
+    from utils.estilos_corporativos import MARGENES_POR_TIPO
+    if tipo_documento and tipo_documento in MARGENES_POR_TIPO:
+        return MARGENES_POR_TIPO[tipo_documento]
     if perfil == "compacto":
         return MARGEN_COMPACTO_SUP, MARGEN_COMPACTO_INF, MARGEN_COMPACTO_IZQ, MARGEN_COMPACTO_DER
     if perfil == "amplio":
@@ -128,10 +140,10 @@ def _margenes(perfil: str):
     return MARGEN_NORMAL_SUP, MARGEN_NORMAL_INF, MARGEN_NORMAL_IZQ, MARGEN_NORMAL_DER
 
 
-def _crear_doc(ruta: str, titulo: str, perfil: str):
-    sup, inf, izq, der = _margenes(perfil)
+def _crear_doc(ruta: str, titulo: str, perfil: str, tipo_documento: str = None):
+    sup, inf, izq, der = _margenes(perfil, tipo_documento)
     return SimpleDocTemplate(
-        ruta, pagesize=letter, topMargin=sup, bottomMargin=max(inf, 2.0 * cm),
+        ruta, pagesize=A4, topMargin=sup, bottomMargin=max(inf, 1.7 * cm),
         leftMargin=izq, rightMargin=der, title=titulo, author="Gestor RH IA",
         subject="Documento laboral generado por Gestor RH IA", allowSplitting=True,
     )
@@ -301,13 +313,13 @@ def _build(ruta: str, titulo: str, tipo: str, empleado_raw: dict, empresa_raw: d
         tipo, empleado["documento"], empresa["nit"], usuario=usuario,
         numero=numero_documento, estado=estado,
     )
-    doc = _crear_doc(ruta, titulo, perfil)
+    doc = _crear_doc(ruta, titulo, perfil, tipo_documento=tipo)
     estilos = crear_estilos(paleta, perfil="compacto" if perfil == "compacto" else "normal")
     cabecera = crear_encabezado_corporativo(
         empresa, paleta, perfil="compacto" if perfil == "compacto" else "normal",
         ancho_total=doc.width,
     )
-    story = [*cabecera, _titulo(titulo, estilos, paleta), _control_linea(control, paleta, estilos, doc.width), Spacer(1, 5), *elementos]
+    story = [*cabecera, _titulo(titulo, estilos, paleta), Spacer(1, 8), *elementos]
     Path(ruta).parent.mkdir(parents=True, exist_ok=True)
     doc.build(
         story,
@@ -332,53 +344,125 @@ def generar_certificado_premium(empleado_raw: dict, empresa_raw: dict, ruta: str
     estilos = crear_estilos(paleta, perfil="compacto")
     activo = not bool(str(empleado["fecha_retiro"] or "").strip())
     nombre = _txt(empleado["nombre"])
-    identificacion = f"{_txt(empleado['tipo_documento'])} {_txt(empleado['documento'])}"
+    identificacion = f"{_txt(empleado['tipo_documento'])} No. {_txt(empleado['documento'])}"
+
+    # ─── Estructura CARTA EMPRESARIAL (estilo modelo del cliente) ────────────
+    # 1. Fecha alineada a la izquierda
+    # 2. Palabra "CERTIFICA" centrada como separador
+    # 3. Cuerpo en prosa justificada (empieza con "Que...")
+    # 4. Línea de solicitud/expedición
+    # 5. "Cordialmente,"
+    # 6. Firma con nombre en negrita mayúsculas + cargo
+
+    fecha_emision = config.get("fecha_emision") or date.today()
+    ciudad = _txt(empresa['ciudad'])
+    proposito = _txt(config.get("proposito") or "los fines que la persona interesada estime pertinentes")
+
+    # Encabezado de fecha
+    encabezado_fecha = f"{ciudad}, {_fecha(fecha_emision)}"
+
+    # Cuerpo en prosa (comienza con "Que...")
     if activo:
         cuerpo = (
-            f"<b>{_txt(empresa['nombre'])}</b>, identificada con NIT <b>{_txt(empresa['nit'])}</b>, "
-            f"certifica que <b>{nombre}</b>, identificado con <b>{identificacion}</b>, se encuentra vinculado "
-            f"desde el <b>{_fecha(empleado['fecha_ingreso'])}</b> mediante contrato <b>{_txt(empleado['tipo_contrato'])}</b> "
-            f"y desempeña el cargo de <b>{_txt(empleado['cargo'])}</b>."
+            f"Que <b>{nombre}</b>, identificado(a) con <b>{identificacion}</b>, "
+            f"se encuentra vinculado(a) a esta empresa desde el <b>{_fecha(empleado['fecha_ingreso'])}</b>, "
+            f"mediante contrato <b>{_txt(empleado['tipo_contrato']).lower()}</b>, "
+            f"desempeñando el cargo de <b>{_txt(empleado['cargo'])}</b>."
         )
         if incluir_salario:
-            cuerpo += f" Actualmente devenga un salario mensual de <b>{formato_moneda(empleado['salario'])} COP</b>."
+            cuerpo += (
+                f" Actualmente devenga un salario mensual de "
+                f"<b>{formato_moneda(empleado['salario'])}</b>."
+            )
     else:
         cuerpo = (
-            f"<b>{_txt(empresa['nombre'])}</b>, identificada con NIT <b>{_txt(empresa['nit'])}</b>, "
-            f"certifica que <b>{nombre}</b>, identificado con <b>{identificacion}</b>, laboró desde el "
-            f"<b>{_fecha(empleado['fecha_ingreso'])}</b> hasta el <b>{_fecha(empleado['fecha_retiro'])}</b>, "
-            f"mediante contrato <b>{_txt(empleado['tipo_contrato'])}</b>, y desempeñó el cargo de "
-            f"<b>{_txt(empleado['cargo'])}</b>."
+            f"Que <b>{nombre}</b>, identificado(a) con <b>{identificacion}</b>, "
+            f"laboró en esta empresa desde el <b>{_fecha(empleado['fecha_ingreso'])}</b> "
+            f"hasta el <b>{_fecha(empleado['fecha_retiro'])}</b>, "
+            f"mediante contrato <b>{_txt(empleado['tipo_contrato']).lower()}</b>, "
+            f"desempeñando el cargo de <b>{_txt(empleado['cargo'])}</b>."
         )
         if incluir_salario:
-            cuerpo += f" Al momento de su retiro devengaba un salario mensual de <b>{formato_moneda(empleado['salario'])} COP</b>."
+            cuerpo += (
+                f" Al momento de su retiro devengaba un salario mensual de "
+                f"<b>{formato_moneda(empleado['salario'])}</b>."
+            )
+
+    # Funciones opcionales integradas
     funciones = config.get("funciones") or []
     if isinstance(funciones, str):
         funciones = [x.strip(" -•\t") for x in funciones.replace(";", "\n").splitlines() if x.strip()]
-    elementos: list = []
-    dirigido = str(config.get("dirigido_a") or "").strip()
-    if dirigido:
-        elementos.append(_parrafo(f"<b>{_txt(dirigido)}</b>", estilos, compacto=True))
-    elementos.extend([Spacer(1, 5), _parrafo(cuerpo, estilos, justificar=True)])
     if config.get("incluir_funciones") and funciones:
-        lista = "".join(f"<br/>• {_txt(f)}" for f in funciones)
-        elementos.extend([_seccion("Funciones principales", estilos, paleta, compacto=True), _parrafo(lista, estilos, compacto=True)])
-    proposito = _txt(config.get("proposito") or "los fines que la persona interesada estime pertinentes")
-    fecha_emision = config.get("fecha_emision") or date.today()
-    elementos.extend([
-        _parrafo(
-            f"Se expide en <b>{_txt(empresa['ciudad'])}</b>, el <b>{_fecha(fecha_emision)}</b>, para {proposito}.",
-            estilos, justificar=True,
-        ),
-        Spacer(1, 4.6 * cm),
-        _firmas(empresa, None, estilos, paleta, incluir_empleado=False),
-        Spacer(1, 8),
-        _parrafo(
-            f"Para verificar la autenticidad de esta certificación, comuníquese al correo "
-            f"<b>{_txt(empresa.get('correo_empresa') or 'corporativo de la empresa')}</b>.",
-            estilos, compacto=True,
-        ),
-    ])
+        lista_funciones = ", ".join(_txt(f).lower() for f in funciones)
+        cuerpo += f" Entre sus funciones principales se encontraban: {lista_funciones}."
+
+    # Línea de expedición como cierre
+    linea_expedicion = (
+        f"La presente certificación se expide en <b>{ciudad}</b>, "
+        f"el <b>{_fecha(fecha_emision)}</b>, para {proposito}."
+    )
+
+    # ─── Estilos específicos del certificado ────────────────────────────────
+    estilo_fecha = ParagraphStyle(
+        "FechaCert", parent=estilos["cuerpo"], fontSize=10.5, leading=13,
+        alignment=TA_LEFT, spaceAfter=18,
+    )
+    estilo_certifica = ParagraphStyle(
+        "CertificaTitulo", parent=estilos["cuerpo"], fontSize=13, leading=16,
+        alignment=TA_CENTER, fontName="Helvetica-Bold",
+        textColor=paleta["primario"], spaceBefore=14, spaceAfter=18,
+    )
+    estilo_cuerpo_carta = ParagraphStyle(
+        "CuerpoCarta", parent=estilos["cuerpo"], fontSize=10.5, leading=15,
+        alignment=TA_JUSTIFY, spaceAfter=16, firstLineIndent=0,
+    )
+    estilo_despedida = ParagraphStyle(
+        "Despedida", parent=estilos["cuerpo"], fontSize=10.5, leading=14,
+        alignment=TA_LEFT, spaceBefore=18, spaceAfter=6,
+    )
+
+    dirigido = str(config.get("dirigido_a") or "").strip()
+    elementos: list = []
+
+    if dirigido:
+        elementos.append(Paragraph(f"<b>{_txt(dirigido)}</b>", estilo_fecha))
+    # (fecha superior eliminada por decisión del cliente — la fecha ya aparece
+    #  en la línea "La presente certificación se expide en... el <fecha>")
+
+    # Palabra "CERTIFICA" centrada
+    elementos.append(Paragraph("<b>CERTIFICA</b>", estilo_certifica))
+
+    # 2 espacios verticales adicionales después de CERTIFICA
+    elementos.append(Spacer(1, 22))
+
+    # Cuerpo en prosa
+    elementos.append(Paragraph(cuerpo, estilo_cuerpo_carta))
+
+    # Línea de expedición
+    elementos.append(Paragraph(linea_expedicion, estilo_cuerpo_carta))
+
+    # Despedida "Cordialmente,"
+    elementos.append(Paragraph("Cordialmente,", estilo_despedida))
+
+    # Espacio para firma (mínimo 25 mm como pide el brief)
+    elementos.append(Spacer(1, 2.6 * cm))
+
+    # Firma alineada a la izquierda (estilo carta empresarial)
+    elementos.append(_firmas(empresa, None, estilos, paleta, incluir_empleado=False, compacto=True))
+
+    # Verificación discreta
+    elementos.append(Spacer(1, 10))
+    correo = _txt(empresa.get('correo_empresa') or 'corporativo de la empresa')
+    estilo_verificacion = ParagraphStyle(
+        "VerifCert", parent=estilos["cuerpo"], fontSize=8.5, leading=11,
+        alignment=TA_LEFT, textColor=paleta["texto_suave"],
+    )
+    elementos.append(Paragraph(
+        f"Para verificar la autenticidad de esta certificación, "
+        f"comuníquese al correo <b>{correo}</b>.",
+        estilo_verificacion,
+    ))
+
     return _build(
         ruta, "CERTIFICACIÓN LABORAL", "certificado", empleado_raw, empresa_raw,
         elementos, "compacto", disenio, usar_marca_agua,
@@ -515,63 +599,119 @@ def generar_dotacion_premium(empleado_raw: dict, empresa_raw: dict, ruta: str,
     estilos = crear_estilos(paleta, perfil="compacto")
     fecha_entrega = config.get("fecha_entrega")
     lugar = config.get("lugar_entrega") or empresa["ciudad"]
-    intro = (
-        f"En <b>{_txt(empresa['ciudad'])}</b>, el <b>{_fecha(fecha_entrega)}</b>, "
-        f"<b>{_txt(empresa['nombre'])}</b> hace entrega a <b>{_txt(empleado['nombre'])}</b>, "
-        f"identificado con {_txt(empleado['tipo_documento'])} No. <b>{_txt(empleado['documento'])}</b>, "
-        "de los siguientes elementos de dotación para el desarrollo de sus funciones:"
-    )
+
     responsable_nombre, responsable_cargo = _separar_nombre_cargo(
         config.get("responsable_entrega") or empresa["representante"], "Responsable de la entrega"
     )
-    cell = ParagraphStyle("CeldaDotacion", parent=estilos["cuerpo_izq"], fontSize=8.0, leading=9.2, spaceAfter=0)
-    header_cell = ParagraphStyle("CabeceraDotacion", parent=cell, textColor=colors.white, fontName="Helvetica-Bold")
-    headers = ["Descripción", "Talla", "Cantidad", "Estado"]
+
+    # ─── Destinatario (SIN "CC. No. XXXX" al lado — solo nombre y cargo) ─────
+    estilo_destinatario = ParagraphStyle(
+        "DestinatarioActa", parent=estilos["cuerpo"], fontSize=10.5, leading=14,
+        alignment=TA_LEFT, spaceAfter=14,
+    )
+    destinatario_lineas = [
+        f"<b>Señor(a):</b> <b>{_txt(empleado['nombre']).upper()}</b>",
+    ]
+    if empleado.get("cargo"):
+        destinatario_lineas.append(f"<b>Cargo:</b> {_txt(empleado['cargo']).upper()}")
+    destinatario_html = "<br/>".join(destinatario_lineas)
+
+    # ─── Intro con contexto y fundamento legal solo si aplica ────────────────
+    tipo_entrega = str(config.get("tipo_entrega") or "").lower()
+    if tipo_entrega == "dotacion_legal" and config.get("cumple_requisitos_dotacion"):
+        fundamento = ", en cumplimiento del Art. 230 del Código Sustantivo del Trabajo"
+    else:
+        fundamento = ""
+
+    intro = (
+        f"<b>{_txt(empresa['nombre'])}</b> hace constar que en la fecha "
+        f"<b>{_fecha(fecha_entrega)}</b>, hace entrega al(la) trabajador(a) de los "
+        f"siguientes elementos de dotación para el desarrollo de sus funciones{fundamento}:"
+    )
+    estilo_intro = ParagraphStyle(
+        "IntroActa", parent=estilos["cuerpo"], fontSize=10.5, leading=14,
+        alignment=TA_JUSTIFY, spaceAfter=14,
+    )
+
+    # ─── Tabla con columna # (numeración) como en el modelo del cliente ──────
+    cell = ParagraphStyle("CeldaDotacion", parent=estilos["cuerpo_izq"],
+                            fontSize=9.5, leading=11, spaceAfter=0, alignment=TA_LEFT)
+    cell_center = ParagraphStyle("CeldaDotacionCentro", parent=cell, alignment=TA_CENTER)
+    header_cell = ParagraphStyle("CabeceraDotacion", parent=cell_center,
+                                    textColor=colors.white, fontName="Helvetica-Bold",
+                                    fontSize=10)
+
+    headers = ["#", "Descripción", "Cantidad", "Estado"]
     filas = [[Paragraph(h, header_cell) for h in headers]]
-    for item in config.get("items") or []:
+    items = config.get("items") or []
+    for idx, item in enumerate(items, start=1):
         filas.append([
+            Paragraph(str(idx), cell_center),
             Paragraph(_txt(item.get("descripcion")), cell),
-            Paragraph(_txt(item.get("talla")), cell),
-            Paragraph(_txt(item.get("cantidad")), cell),
-            Paragraph(_txt(item.get("estado") or "Nuevo"), cell),
+            Paragraph(_txt(item.get("cantidad")), cell_center),
+            Paragraph(_txt(item.get("estado") or "Nuevo"), cell_center),
         ])
-    tabla = Table(filas, colWidths=[8.1 * cm, 2.3 * cm, 2.1 * cm, 3.2 * cm], repeatRows=1, splitByRow=1, hAlign="LEFT")
+
+    # Anchos (A4 con márgenes 22/22 mm → ancho útil ~166 mm = 16.6 cm)
+    tabla = Table(filas, colWidths=[1.2 * cm, 10.2 * cm, 2.2 * cm, 3.0 * cm],
+                    repeatRows=1, splitByRow=1, hAlign="CENTER")
     tabla.setStyle(TableStyle([
+        # Encabezado con fondo azul corporativo (estilo modelo)
         ("BACKGROUND", (0, 0), (-1, 0), paleta["primario"]),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("GRID", (0, 0), (-1, -1), .35, paleta["borde"]),
+        # Bordes finos
+        ("GRID", (0, 0), (-1, -1), 0.5, paleta["borde"]),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("ALIGN", (1, 1), (-1, -1), "CENTER"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 5),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        # Padding cómodo (evitar textos apretados)
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
     ]))
+
+    # ─── Declaración de recibido ────────────────────────────────────────────
+    if tipo_entrega in ("dotacion_legal", "uniforme", "epp"):
+        declaracion_texto = (
+            "El(la) trabajador(a) se compromete a hacer buen uso de los elementos entregados, "
+            "mantenerlos en buen estado y devolverlos en caso de terminación del contrato de trabajo o "
+            "cuando la empresa así lo requiera. Con su firma manifiesta haber recibido a satisfacción "
+            "los elementos detallados."
+        )
+    else:
+        declaracion_texto = (
+            "El(la) trabajador(a) manifiesta haber recibido los elementos relacionados, se compromete "
+            "a destinarlos al desarrollo de sus funciones y a utilizarlos conforme a las políticas "
+            "internas de la empresa."
+        )
+    estilo_declaracion = ParagraphStyle(
+        "DeclaracionActa", parent=estilos["cuerpo"], fontSize=10.5, leading=14,
+        alignment=TA_JUSTIFY, spaceBefore=14, spaceAfter=8,
+    )
+
+    # ─── Ensamblaje con distribución equilibrada ────────────────────────────
     elementos = [
-        _parrafo(intro, estilos, compacto=True, justificar=True),
-        _tabla_datos([
-            ("Trabajador", empleado["nombre"]), ("Identificación", empleado["documento"]),
-            ("Cargo", empleado["cargo"]), ("Fecha de entrega", _fecha(fecha_entrega)),
-            ("Periodo", config.get("periodo_entrega")), ("Responsable que entrega", responsable_nombre),
-            ("Lugar de entrega", lugar),
-        ], estilos, paleta, 15.7 * cm, columnas=2, compacto=True),
-        Spacer(1, 6), tabla, Spacer(1, 7),
-        _parrafo(
-            "La persona trabajadora manifiesta haber recibido los elementos relacionados, se compromete a destinarlos al desarrollo "
-            "de sus funciones y a utilizarlos conforme a las políticas internas de la empresa.",
-            estilos, compacto=True, justificar=True,
-        ),
+        Paragraph(destinatario_html, estilo_destinatario),
+        Paragraph(intro, estilo_intro),
+        tabla,
+        Paragraph(declaracion_texto, estilo_declaracion),
     ]
+
     if config.get("mostrar_observaciones_generales") and config.get("observaciones"):
-        elementos.append(_parrafo(f"<b>Observaciones:</b> {_txt(config['observaciones'])}", estilos, compacto=True))
-    elementos.extend([
-        Spacer(1, 8),
-        _firmas(
-            empresa, empleado, estilos, paleta, incluir_empleado=True,
-            izquierdo_nombre=responsable_nombre, izquierdo_cargo=responsable_cargo,
-            compacto=True,
-        ),
-    ])
+        estilo_obs = ParagraphStyle(
+            "ObsActa", parent=estilos["cuerpo"], fontSize=10, leading=13,
+            alignment=TA_JUSTIFY, spaceAfter=8,
+        )
+        elementos.append(Paragraph(f"<b>Observaciones:</b> {_txt(config['observaciones'])}", estilo_obs))
+
+    # Espacio antes de firmas — mínimo 25 mm para firma manuscrita como pide el brief
+    elementos.append(Spacer(1, 2.6 * cm))
+
+    elementos.append(_firmas(
+        empresa, empleado, estilos, paleta, incluir_empleado=True,
+        izquierdo_nombre=responsable_nombre, izquierdo_cargo=responsable_cargo,
+        compacto=True,
+    ))
+
     return _build(
         ruta, "ACTA DE ENTREGA DE DOTACIÓN", "dotacion", empleado_raw, empresa_raw,
         elementos, "compacto", disenio, usar_marca_agua,
@@ -670,6 +810,8 @@ def generar_liquidacion_premium(resultado: dict, empresa_raw: dict, ruta: str,
         "novedades_confirmadas": config.get("novedades_confirmadas", resultado.get("Novedades confirmadas", False)),
         "dias_salario_pendiente": resultado.get("Dias salario pendiente", 0),
         "estado_aportes_periodo_final": resultado.get("Estado aportes periodo final"),
+        "aporte_salud_ya_descontado": resultado.get("Aporte salud ya descontado", 0),
+        "aporte_pension_ya_descontado": resultado.get("Aporte pension ya descontado", 0),
     }
     hallazgos = validar_documento("liquidacion", empleado_raw, empresa_raw, val_config)
     if hay_errores(hallazgos):
@@ -707,14 +849,117 @@ def generar_liquidacion_premium(resultado: dict, empresa_raw: dict, ruta: str,
                 f"{_fecha_corta(extra.get('periodo_inicial'))} al {_fecha_corta(extra.get('periodo_final'))}",
                 extra.get("dias", ""), extra.get("base", 0), extra.get("valor", 0))
 
-    ded_ley = [x for x in (resultado.get("Deducciones de ley") or []) if float(x.get("valor", 0) or 0) > 0]
+    # ─── Recargos adicionales (adicionados manualmente por el usuario) ───────
+    # Se agregan como conceptos devengados normales dentro del detalle.
+    # Formato esperado: [{"concepto": "Recargo nocturno", "periodo": "...", "dias": N, "base": X, "valor": Y}, ...]
+    for recargo in resultado.get("Recargos adicionales", []) or []:
+        agregar(
+            etiqueta_formal(recargo.get("concepto"), "Recargo"),
+            recargo.get("periodo", ""),
+            recargo.get("dias", ""),
+            recargo.get("base", 0),
+            recargo.get("valor", 0),
+        )
+
+    # ─── Cálculo automático de aportes de salud y pensión pendientes ─────────
+    # Cuando hay salario pendiente en la liquidación, se determina si los
+    # aportes de nómina ya fueron descontados o hay que descontarlos aquí.
+    #
+    # BASE DE APORTE:
+    # Los aportes de salud/pensión se causan sobre el salario mensual completo
+    # (no sobre los días pendientes). Ejemplo con salario $2.000.000:
+    #   - Base quincenal: $1.000.000  (aporte 4% = $40.000)
+    #   - Base mensual: $2.000.000    (aporte 4% = $80.000)
+    #
+    # ESTADOS:
+    #   descontados_completamente   → NO descontar nada
+    #   descontados_segunda_quincena → NO descontar (todo cubierto)
+    #   descontados_primera_quincena → Descontar SOLO 2da quincena (base = salario/2)
+    #   descontados_fin_de_mes      → Descontar TODO el mes (base = salario mensual)
+    #   no_descontados               → Descontar TODO el mes (base = salario mensual)
+    #   descontados_parcialmente     → Descontar diferencia según valores registrados
+    #   revision_manual              → No calcular, dejar tal cual
+    ded_ley_calculadas = list(resultado.get("Deducciones de ley") or [])
+    tiene_deducciones_previas = any(
+        x for x in ded_ley_calculadas
+        if float(x.get("valor", 0) or 0) > 0
+    )
+    dias_pendientes = int(resultado.get("Dias salario pendiente", 0) or 0)
+    salario_base_mensual = float(resultado.get("Salario base", 0) or 0)
+    estado_aportes = str(resultado.get("Estado aportes periodo final") or "").strip().lower()
+
+    if dias_pendientes > 0 and salario_base_mensual > 0 and not tiene_deducciones_previas:
+        base_aporte_mensual = salario_base_mensual         # $2.000.000
+        base_aporte_quincenal = salario_base_mensual / 2   # $1.000.000
+
+        base_aporte = 0.0  # base efectiva sobre la que se calculará
+        etiqueta_periodo = ""
+
+        if estado_aportes in ("descontados_fin_de_mes", "no_descontados"):
+            # Descontar sobre el mes completo
+            base_aporte = base_aporte_mensual
+            etiqueta_periodo = ""  # sin sufijo, es el aporte estándar mensual
+        elif estado_aportes == "descontados_primera_quincena":
+            # Solo falta la segunda quincena
+            base_aporte = base_aporte_quincenal
+            etiqueta_periodo = " (2da quincena)"
+        elif estado_aportes == "descontados_parcialmente":
+            # Aporte esperado del mes completo menos lo que ya se descontó
+            aporte_completo_salud = round(base_aporte_mensual * 0.04, 0)
+            aporte_completo_pension = round(base_aporte_mensual * 0.04, 0)
+            salud_ya = float(resultado.get("Aporte salud ya descontado", 0) or 0)
+            pension_ya = float(resultado.get("Aporte pension ya descontado", 0) or 0)
+            salud_pendiente = max(0, aporte_completo_salud - salud_ya)
+            pension_pendiente = max(0, aporte_completo_pension - pension_ya)
+            if salud_pendiente > 0:
+                ded_ley_calculadas.append({
+                    "concepto": "Salud trabajador (pendiente)",
+                    "base": base_aporte_mensual, "tarifa": "4%",
+                    "valor": salud_pendiente,
+                })
+            if pension_pendiente > 0:
+                ded_ley_calculadas.append({
+                    "concepto": "Pensión trabajador (pendiente)",
+                    "base": base_aporte_mensual, "tarifa": "4%",
+                    "valor": pension_pendiente,
+                })
+            base_aporte = 0.0  # ya se procesó arriba
+        # Estados "descontados_completamente", "descontados_segunda_quincena",
+        # "revision_manual" y desconocidos → base_aporte = 0 (no descontar)
+
+        if base_aporte > 0:
+            valor_salud = round(base_aporte * 0.04, 0)
+            valor_pension = round(base_aporte * 0.04, 0)
+            if valor_salud > 0:
+                ded_ley_calculadas.append({
+                    "concepto": f"Salud trabajador{etiqueta_periodo}",
+                    "base": base_aporte, "tarifa": "4%",
+                    "valor": valor_salud,
+                })
+            if valor_pension > 0:
+                ded_ley_calculadas.append({
+                    "concepto": f"Pensión trabajador{etiqueta_periodo}",
+                    "base": base_aporte, "tarifa": "4%",
+                    "valor": valor_pension,
+                })
+
+    ded_ley = [x for x in ded_ley_calculadas if float(x.get("valor", 0) or 0) > 0]
     ded_aut = [x for x in (resultado.get("Deducciones autorizadas detalle") or []) if float(x.get("valor", 0) or 0) > 0]
     if not ded_aut and float(resultado.get("TOTAL DEDUCCIONES AUTORIZADAS", 0) or 0) > 0:
         ded_aut = [{"concepto": "Descuentos autorizados registrados", "base": resultado.get("TOTAL DEDUCCIONES AUTORIZADAS"), "tarifa": "", "valor": resultado.get("TOTAL DEDUCCIONES AUTORIZADAS")}]
     bruto = float(resultado.get("TOTAL DEVENGADO", 0) or 0)
-    total_ley = float(resultado.get("TOTAL DEDUCCIONES DE LEY", sum(float(x.get("valor", 0) or 0) for x in ded_ley)) or 0)
+    # Siempre recalcular total_ley desde las deducciones actuales, para incluir
+    # los aportes calculados automáticamente arriba (salud/pensión pendientes)
+    total_ley = sum(float(x.get("valor", 0) or 0) for x in ded_ley)
     total_aut = float(resultado.get("TOTAL DEDUCCIONES AUTORIZADAS", sum(float(x.get("valor", 0) or 0) for x in ded_aut)) or 0)
-    neto = float(resultado.get("NETO A PAGAR", bruto - total_ley - total_aut) or 0)
+    # El neto se recalcula automáticamente si los totales cambiaron
+    neto_original = float(resultado.get("NETO A PAGAR", 0) or 0)
+    total_deducciones = total_ley + total_aut
+    total_ley_original = float(resultado.get("TOTAL DEDUCCIONES DE LEY", 0) or 0)
+    if abs(total_ley - total_ley_original) > 1:  # cambió el total de deducciones
+        neto = bruto - total_deducciones
+    else:
+        neto = neto_original if neto_original > 0 else (bruto - total_deducciones)
 
     resumen = Table([
         ["TOTAL BRUTO", formato_moneda(bruto)],

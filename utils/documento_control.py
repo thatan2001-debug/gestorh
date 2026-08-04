@@ -11,7 +11,7 @@ from typing import Optional
 from zoneinfo import ZoneInfo
 
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import letter
+from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import cm
 from reportlab.pdfgen import canvas
 
@@ -118,27 +118,16 @@ class ControlDocumentalCanvas(canvas.Canvas):
         super().save()
 
     def _dibujar_fondo_y_pie(self, total_paginas: int) -> None:
-        ancho, alto = letter
-        if self.usar_marca_agua:
-            self.saveState()
-            self.translate(ancho / 2, alto / 2)
-            self.rotate(32)
-            self.setFillColor(colors.HexColor("#9CA3AF"))
-            try:
-                self.setFillAlpha(0.16)
-            except Exception:
-                pass
-            self.setFont("Helvetica-Bold", 28)
-            self.drawCentredString(0, 8, "BORRADOR - PENDIENTE DE REVISION")
-            self.setFont("Helvetica", 11)
-            self.drawCentredString(0, -12, "No valido para firma ni entrega")
-            self.restoreState()
+        ancho, alto = A4
+        # Marca de agua diagonal ELIMINADA por decisión del cliente
+        # (antes decía "BORRADOR - PENDIENTE DE REVISION")
 
         if self.getPageNumber() > 1:
             self.saveState()
             self.setFont("Helvetica-Bold", 7.5)
             self.setFillColor(self.paleta.get("primario", colors.HexColor("#1B3F6E")))
-            etiqueta = f"{self.titulo_doc} - CONTINUACION · Trabajador {self.control.trabajador_id}"
+            # Etiqueta simplificada de continuación (sin ID de trabajador)
+            etiqueta = f"{self.titulo_doc} - Continuación"
             self.drawString(2.0 * cm, alto - 1.25 * cm, etiqueta[:120])
             self.setStrokeColor(self.paleta.get("borde_suave", colors.HexColor("#E5E7EB")))
             self.line(2.0 * cm, alto - 1.42 * cm, ancho - 2.0 * cm, alto - 1.42 * cm)
@@ -153,13 +142,11 @@ class ControlDocumentalCanvas(canvas.Canvas):
         self.setFont("Helvetica", 7.2)
         self.setFillColor(gris)
         fecha = self.control.generado_en.strftime("%d/%m/%Y")
-        izquierda = (
-            f"Gestor RH IA · {self.control.codigo} · {self.control.numero} · "
-            f"Version {self.control.version_plantilla} · {self.control.estado} · {fecha}"
-        )
+        # Pie simplificado: solo marca y fecha, sin código/versión/estado
+        izquierda = f"Gestor RH IA · {fecha}"
         self.drawString(2.0 * cm, 1.08 * cm, izquierda[:116])
         self.drawRightString(ancho - 2.0 * cm, 1.08 * cm,
-                             f"Pagina {self.getPageNumber()} de {total_paginas}")
+                             f"Página {self.getPageNumber()} de {total_paginas}")
         self.restoreState()
 
 
