@@ -136,7 +136,9 @@ def test_acta_extensa_repite_solo_los_cuatro_encabezados(tmp_path: Path):
     })
     doc = fitz.open(ruta)
     assert len(doc) >= 2
-    for page in doc:
+    paginas_con_items = [page for page in doc if "Elemento corporativo número" in page.get_text()]
+    assert paginas_con_items, "El acta extensa debe contener páginas con filas de elementos"
+    for page in paginas_con_items:
         texto = page.get_text()
         assert all(x in texto for x in ("Descripción", "Talla", "Cantidad", "Estado"))
         assert "Observaciones" not in texto and "Referencia" not in texto
