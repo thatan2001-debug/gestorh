@@ -553,34 +553,47 @@ def generar_contrato_indefinido_premium(empleado_raw: dict, empresa_raw: dict, r
          f"<b>{_txt(config.get('anexos') or 'perfil de cargo y políticas aceptadas')}</b>. Cada parte recibe un ejemplar o acceso verificable."),
     ])
 
+    # Perfil: normal si hay muchas cláusulas, compacto si pocas
+    # Contratos con menos de 11 cláusulas caben en 1 página con perfil compacto
+    perfil_contrato = "normal" if len(clauses) >= 12 else "compacto"
+    if perfil_contrato == "compacto":
+        estilos = crear_estilos(paleta, perfil="compacto")
+
     partes = _tabla_datos([
         ("Empleador", empresa["nombre"]), ("NIT", empresa["nit"]),
         ("Representante", empresa["representante"]), ("Domicilio", empresa["ciudad"]),
         ("Trabajador", empleado["nombre"]), ("Identificación", f"{empleado['tipo_documento']} {empleado['documento']}"),
         ("Cargo", empleado["cargo"]), ("Fecha de inicio", _fecha(config.get("fecha_inicio_contrato"))),
-    ], estilos, paleta, 15.7 * cm, columnas=2)
+    ], estilos, paleta, 15.7 * cm, columnas=2, compacto=(perfil_contrato=="compacto"))
     elementos: list = [partes, Spacer(1, 6), _parrafo(
         "Entre las partes identificadas se celebra el presente contrato individual de trabajo, regido por la normativa laboral colombiana y las cláusulas siguientes:",
-        estilos, justificar=True,
+        estilos, justificar=True, compacto=(perfil_contrato=="compacto"),
     )]
-    corte_pagina = 5 if len(clauses) >= 11 else 7
+    # NO forzar PageBreak — dejar que ReportLab decida según contenido real.
+    # Si el contrato cabe en 1 página, se generará en 1; si no cabe, saltará
+    # automáticamente. Antes se forzaba PageBreak después de la cláusula 5/7,
+    # lo que hacía que TODOS los contratos fueran de 2 páginas aunque el
+    # contenido cupiera en una.
     for idx, (nombre_clause, texto_clause) in enumerate(clauses):
         ordinal = ORDINALES[idx] if idx < len(ORDINALES) else f"CLÁUSULA {idx + 1}"
-        elementos.append(_parrafo(f"<b>{ordinal} - {_txt(nombre_clause)}:</b> {texto_clause}", estilos, justificar=True))
-        if idx + 1 == corte_pagina:
-            elementos.append(PageBreak())
+        elementos.append(_parrafo(
+            f"<b>{ordinal} - {_txt(nombre_clause)}:</b> {texto_clause}",
+            estilos, justificar=True,
+            compacto=(perfil_contrato=="compacto")
+        ))
     elementos.extend([
         _parrafo(
             f"Se firma en <b>{_txt(empresa['ciudad'])}</b>, el <b>{_fecha(config.get('fecha_celebracion') or date.today())}</b>.",
-            estilos,
+            estilos, compacto=(perfil_contrato=="compacto"),
         ),
-        Spacer(1, 12),
-        _firmas(empresa, empleado, estilos, paleta, incluir_empleado=True),
+        Spacer(1, 8 if perfil_contrato == "compacto" else 12),
+        _firmas(empresa, empleado, estilos, paleta, incluir_empleado=True,
+                 compacto=(perfil_contrato=="compacto")),
     ])
     return _build(
         ruta, "CONTRATO INDIVIDUAL DE TRABAJO A TÉRMINO INDEFINIDO",
         "contrato_indefinido", empleado_raw, empresa_raw, elementos,
-        "amplio", disenio, usar_marca_agua,
+        perfil_contrato, disenio, usar_marca_agua,
         impresion_economica=bool(config.get("impresion_economica")),
         usuario=config.get("usuario_generador", "Usuario autenticado"),
         numero_documento=config.get("numero_documento"),
@@ -1028,4 +1041,179 @@ def generar_liquidacion_premium(resultado: dict, empresa_raw: dict, ruta: str,
         usuario=config.get("usuario_generador", "Usuario autenticado"),
         numero_documento=config.get("numero_documento"),
         estado_documento=config.get("estado_documento", "Aprobado"),
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# DOCUMENTOS DISCIPLINARIOS — usan el mismo motor visual que los demás
+# ═══════════════════════════════════════════════════════════════════════
+
+def generar_llamado_atencion_premium(empleado_raw: dict, empresa_raw: dict, ruta: str,
+                                       config: dict, disenio: int = 1,
+                                       usar_marca_agua: bool = False):
+    """
+    Llamado de atención — migrado al motor visual unificado.
+    Usa el mismo diseño que certificados y actas para consistencia visual.
+    """
+    empleado, empresa = _empleado_normalizado(empleado_raw), _empresa_normalizada(empresa_raw)
+    paleta = PALETAS.get(int(disenio), PALETAS[1])
+    estilos = crear_estilos(paleta, perfil="compacto")
+
+    motivo = config.get("motivo", "")
+    hechos = config.get("hechos", "")
+    consecuencias = config.get(
+        "consecuencias",
+        "En caso de reincidir en la conducta descrita, la empresa podrá "
+        "iniciar el procedimiento disciplinario correspondiente conforme al "
+        "Reglamento Interno de Trabajo."
+    )
+
+    # Estilos específicos compactos
+    estilo_carta = ParagraphStyle(
+        "LlamadoCuerpo", parent=estilos["cuerpo"],
+        fontSize=10.5, leading=14, alignment=TA_JUSTIFY,
+        spaceBefore=0, spaceAfter=10,
+    )
+    estilo_dest = ParagraphStyle(
+        "LlamadoDest", parent=estilos["cuerpo"],
+        fontSize=10.5, leading=14, alignment=TA_LEFT,
+        spaceBefore=0, spaceAfter=12,
+    )
+    estilo_asunto = ParagraphStyle(
+        "LlamadoAsunto", parent=estilos["cuerpo"],
+        fontSize=10.5, leading=14, alignment=TA_LEFT,
+        spaceBefore=0, spaceAfter=12, fontName="Helvetica-Bold",
+    )
+    estilo_hechos = ParagraphStyle(
+        "LlamadoHechos", parent=estilos["cuerpo"],
+        fontSize=10.5, leading=14, alignment=TA_JUSTIFY,
+        leftIndent=10, spaceBefore=4, spaceAfter=10,
+    )
+
+    fecha_hoy = f"{_txt(empresa['ciudad'])}, {_fecha(date.today())}"
+
+    elementos = [
+        Paragraph(fecha_hoy, estilo_dest),
+        Paragraph(
+            f"Señor(a)<br/>"
+            f"<b>{_txt(empleado.get('nombre', '')).upper()}</b><br/>"
+            f"C.C. {_txt(empleado.get('documento', ''))}<br/>"
+            f"Cargo: {_txt(empleado.get('cargo', ''))}<br/>"
+            f"E. S. D.",
+            estilo_dest
+        ),
+        Paragraph(f"<b>Asunto:</b> Llamado de atención escrito - {_txt(motivo)}",
+                    estilo_asunto),
+        Paragraph(
+            "Por medio de la presente, se le hace un llamado de atención por "
+            "escrito debido a los siguientes hechos:",
+            estilo_carta
+        ),
+    ]
+    if hechos:
+        elementos.append(Paragraph(f"<b>Hechos:</b> {_txt(hechos)}", estilo_hechos))
+    elementos.extend([
+        Paragraph(
+            "Estos hechos constituyen un incumplimiento a sus obligaciones "
+            "laborales y a lo establecido en el Reglamento Interno de Trabajo.",
+            estilo_carta
+        ),
+        Paragraph(_txt(consecuencias), estilo_carta),
+        Paragraph(
+            "Se solicita firmar como constancia de recibido. La firma no implica "
+            "aceptación de los hechos, y usted tiene derecho a presentar descargos "
+            "por escrito dentro de los siguientes cinco (5) días hábiles.",
+            estilo_carta
+        ),
+        Spacer(1, 20),
+        _firmas(empresa, empleado, estilos, paleta, incluir_empleado=True, compacto=True),
+    ])
+
+    return _build(
+        ruta, "LLAMADO DE ATENCIÓN", "carta_admin",
+        empleado_raw, empresa_raw, elementos, "compacto", disenio,
+        usar_marca_agua=False,  # SIEMPRE False - documento disciplinario formal
+        usuario=config.get("usuario_generador", "Usuario autenticado"),
+        estado_documento=config.get("estado_documento", "Emitido"),
+    )
+
+
+def generar_citacion_descargos_premium(empleado_raw: dict, empresa_raw: dict, ruta: str,
+                                         config: dict, disenio: int = 1,
+                                         usar_marca_agua: bool = False):
+    """
+    Citación a diligencia de descargos — motor visual unificado.
+    """
+    empleado, empresa = _empleado_normalizado(empleado_raw), _empresa_normalizada(empresa_raw)
+    paleta = PALETAS.get(int(disenio), PALETAS[1])
+    estilos = crear_estilos(paleta, perfil="compacto")
+
+    fecha_diligencia = config.get("fecha_diligencia", "")
+    hora_diligencia = config.get("hora_diligencia", "")
+    lugar = config.get("lugar", "las instalaciones de la empresa")
+    hechos = config.get("hechos", "")
+
+    estilo_carta = ParagraphStyle(
+        "CitacionCuerpo", parent=estilos["cuerpo"],
+        fontSize=10.5, leading=14, alignment=TA_JUSTIFY,
+        spaceBefore=0, spaceAfter=10,
+    )
+    estilo_dest = ParagraphStyle(
+        "CitacionDest", parent=estilos["cuerpo"],
+        fontSize=10.5, leading=14, alignment=TA_LEFT,
+        spaceBefore=0, spaceAfter=12,
+    )
+    estilo_asunto = ParagraphStyle(
+        "CitacionAsunto", parent=estilos["cuerpo"],
+        fontSize=10.5, leading=14, alignment=TA_LEFT,
+        spaceBefore=0, spaceAfter=12, fontName="Helvetica-Bold",
+    )
+    estilo_hechos = ParagraphStyle(
+        "CitacionHechos", parent=estilos["cuerpo"],
+        fontSize=10.5, leading=14, alignment=TA_JUSTIFY,
+        leftIndent=10, spaceBefore=4, spaceAfter=10,
+    )
+
+    fecha_hoy = f"{_txt(empresa['ciudad'])}, {_fecha(date.today())}"
+
+    elementos = [
+        Paragraph(fecha_hoy, estilo_dest),
+        Paragraph(
+            f"Señor(a)<br/>"
+            f"<b>{_txt(empleado.get('nombre', '')).upper()}</b><br/>"
+            f"C.C. {_txt(empleado.get('documento', ''))}<br/>"
+            f"Cargo: {_txt(empleado.get('cargo', ''))}<br/>"
+            f"E. S. D.",
+            estilo_dest
+        ),
+        Paragraph("<b>Asunto:</b> Citación a diligencia de descargos",
+                    estilo_asunto),
+        Paragraph(
+            f"En cumplimiento del debido proceso y su derecho a la defensa, se le cita "
+            f"a diligencia de descargos que se llevará a cabo el <b>{_txt(fecha_diligencia)}</b> "
+            f"a las <b>{_txt(hora_diligencia)}</b> en <b>{_txt(lugar)}</b>.",
+            estilo_carta
+        ),
+    ]
+    if hechos:
+        elementos.append(Paragraph(f"<b>Hechos objeto de la diligencia:</b> {_txt(hechos)}",
+                                     estilo_hechos))
+    elementos.extend([
+        Paragraph(
+            "Durante la diligencia usted podrá exponer los hechos, presentar pruebas y "
+            "ser asistido por dos (2) representantes de los trabajadores si así lo desea, "
+            "conforme al artículo 115 del Código Sustantivo del Trabajo.",
+            estilo_carta
+        ),
+        Paragraph("<b>Su asistencia es de carácter obligatorio.</b>", estilo_carta),
+        Spacer(1, 25),
+        _firmas(empresa, None, estilos, paleta, incluir_empleado=False, compacto=True),
+    ])
+
+    return _build(
+        ruta, "CITACIÓN A DILIGENCIA DE DESCARGOS", "carta_admin",
+        empleado_raw, empresa_raw, elementos, "compacto", disenio,
+        usar_marca_agua=False,
+        usuario=config.get("usuario_generador", "Usuario autenticado"),
+        estado_documento=config.get("estado_documento", "Emitido"),
     )
